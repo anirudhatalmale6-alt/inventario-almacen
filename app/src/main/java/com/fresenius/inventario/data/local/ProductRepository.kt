@@ -1,0 +1,64 @@
+package com.fresenius.inventario.data.local
+
+import android.content.Context
+import com.fresenius.inventario.data.remote.SheetsManager
+import com.fresenius.inventario.model.Product
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+class ProductRepository(context: Context) {
+
+    private val sheetsManager = SheetsManager(context)
+    private val _products = MutableStateFlow<List<Product>>(emptyList())
+    val products: StateFlow<List<Product>> = _products
+
+    fun getSheetsManager() = sheetsManager
+
+    suspend fun refresh() {
+        sheetsManager.ensureHeaders()
+        _products.value = sheetsManager.loadProducts()
+    }
+
+    fun findByPartNo(partNo: String): Product? {
+        return _products.value.find {
+            it.partNo.equals(partNo, ignoreCase = true)
+        }
+    }
+
+    fun findByBarcode(barcode: String): Product? {
+        return _products.value.find {
+            it.barcode?.equals(barcode, ignoreCase = true) == true
+        }
+    }
+
+    suspend fun linkBarcode(product: Product, barcode: String) {
+        product.barcode = barcode
+        sheetsManager.updateBarcode(product, barcode)
+    }
+
+    suspend fun setMinStock(product: Product, minStock: Int) {
+        product.minStock = minStock
+        sheetsManager.updateMinStock(product, minStock)
+    }
+
+    suspend fun updateStock(product: Product, newStock: Int) {
+        product.inStock = newStock
+        sheetsManager.updateStock(product, newStock)
+    }
+
+    fun getProductsWithLowStock(): List<Product> {
+        return _products.value.filter { it.inStock < it.minStock }
+    }
+
+    fun getProductsWithBarcode(): List<Product> {
+        return _products.value.filter { !it.barcode.isNullOrEmpty() }
+    }
+
+    fun getProductsWithoutBarcode(): List<Product> {
+        return _products.value.filter { it.barcode.isNullOrEmpty() }
+    }
+
+    fun getItemGroups(): List<String> {
+        return _products.value.map { it.itemGroup }.distinct().sorted()
+    }
+}
