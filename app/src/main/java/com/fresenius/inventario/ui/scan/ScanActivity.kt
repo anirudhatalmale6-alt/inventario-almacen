@@ -166,15 +166,19 @@ class ScanActivity : AppCompatActivity() {
             }
         }
 
-        // If we got a Part No. from OCR, look it up
+        // If we got a Part No. from OCR, look it up (includes fuzzy matching)
         if (partNo != null) {
             val product = repository.findByPartNo(partNo)
             if (product != null) {
-                Log.d(TAG, "Found product by Part No: ${product.partNo}")
+                val fuzzyNote = if (!product.partNo.equals(partNo, ignoreCase = true)) {
+                    Log.d(TAG, "Fuzzy match: OCR read '$partNo', matched to '${product.partNo}'")
+                    " (OCR leyó: $partNo)"
+                } else ""
+                Log.d(TAG, "Found product by Part No: ${product.partNo}$fuzzyNote")
                 if (barcode != null && product.barcode.isNullOrEmpty()) {
-                    showLinkBarcodeDialog(product, barcode)
+                    showLinkBarcodeDialog(product, barcode, fuzzyNote)
                 } else {
-                    showProductFound(product, barcode)
+                    showProductFound(product, barcode, fuzzyNote)
                 }
                 return
             }
@@ -193,11 +197,11 @@ class ScanActivity : AppCompatActivity() {
         binding.btnRescan.visibility = View.VISIBLE
     }
 
-    private fun showProductFound(product: Product, barcode: String?) {
+    private fun showProductFound(product: Product, barcode: String?, fuzzyNote: String = "") {
         isScanning = false
         binding.resultCard.visibility = View.VISIBLE
         binding.tvResultTitle.text = "Producto encontrado"
-        binding.tvResultPartNo.text = "Ref: ${product.partNo}"
+        binding.tvResultPartNo.text = "Ref: ${product.partNo}$fuzzyNote"
         binding.tvResultBarcode.text = "Código: ${product.barcode ?: barcode ?: "Sin código"}"
         binding.tvResultDescription.text = product.description
         binding.tvResultStock.text = "Stock: ${product.inStock} | Mínimo: ${product.minStock} | Grupo: ${product.itemGroup}"
@@ -214,7 +218,7 @@ class ScanActivity : AppCompatActivity() {
         binding.btnExit.setOnClickListener { showStockDialog(product, false) }
     }
 
-    private fun showLinkBarcodeDialog(product: Product, barcode: String) {
+    private fun showLinkBarcodeDialog(product: Product, barcode: String, fuzzyNote: String = "") {
         isScanning = false
 
         AlertDialog.Builder(this)

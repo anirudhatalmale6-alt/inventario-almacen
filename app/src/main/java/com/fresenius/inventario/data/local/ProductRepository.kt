@@ -3,6 +3,7 @@ package com.fresenius.inventario.data.local
 import android.content.Context
 import com.fresenius.inventario.data.remote.SheetsManager
 import com.fresenius.inventario.model.Product
+import com.fresenius.inventario.util.PartNoExtractor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -20,9 +21,18 @@ class ProductRepository(context: Context) {
     }
 
     fun findByPartNo(partNo: String): Product? {
-        return _products.value.find {
+        // Exact match first
+        _products.value.find {
             it.partNo.equals(partNo, ignoreCase = true)
+        }?.let { return it }
+
+        // Fuzzy match (OCR can misread digits: 4/6, 3/8, 5/6, etc.)
+        val knownPartNos = _products.value.map { it.partNo }
+        val fuzzyMatch = PartNoExtractor.findClosestMatch(partNo, knownPartNos)
+        if (fuzzyMatch != null) {
+            return _products.value.find { it.partNo == fuzzyMatch }
         }
+        return null
     }
 
     fun findByBarcode(barcode: String): Product? {

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.fresenius.inventario.model.ScanResult
+import com.fresenius.inventario.util.BarcodeFromOcr
 import com.fresenius.inventario.util.PartNoExtractor
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -120,11 +121,14 @@ class ScanAnalyzer(
         try {
             val partNo = ocrText?.let { PartNoExtractor.extract(it) }
 
-            if (barcode != null || partNo != null) {
-                Log.d(TAG, "Delivering result: barcode=$barcode, partNo=$partNo")
+            // If barcode scanner failed, try extracting barcode from OCR text
+            val finalBarcode = barcode ?: ocrText?.let { BarcodeFromOcr.extract(it) }
+
+            if (finalBarcode != null || partNo != null) {
+                Log.d(TAG, "Delivering result: barcode=$finalBarcode, partNo=$partNo")
                 val result = ScanResult(
-                    barcode = barcode,
-                    barcodeFormat = barcodeFormat,
+                    barcode = finalBarcode,
+                    barcodeFormat = barcodeFormat ?: if (finalBarcode != null && barcode == null) "OCR_FALLBACK" else null,
                     partNo = partNo,
                     ocrFullText = ocrText
                 )

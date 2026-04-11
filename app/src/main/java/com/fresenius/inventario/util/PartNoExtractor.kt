@@ -11,10 +11,9 @@ object PartNoExtractor {
 
     private const val TAG = "PartNoExtractor"
 
-    // Pattern: "Part No." or "Part No" followed by optional whitespace/newline, then the reference
-    // Also handles OCR errors like "Part No," or "Pari No." etc.
+    // Pattern: "Part No." or similar OCR variations, followed by the reference
     private val PART_NO_PATTERN = Regex(
-        """(?i)(?:Part|Pari|Parf)\s*(?:No|N[oO0])\s*[.,:;]?\s*[\n\r]?\s*([A-Z]?\d{4,10}[A-Z]?)""",
+        """(?i)(?:Part|Pari|Parf)\s*(?:No|N[oO0c])\s*[.,:;]?\s*[\n\r]?\s*([A-Z]?\d{4,10}[A-Z]?)""",
         RegexOption.MULTILINE
     )
 
@@ -54,5 +53,37 @@ object PartNoExtractor {
 
         Log.d(TAG, "No Part No. found in text")
         return null
+    }
+
+    /**
+     * Fuzzy matching: finds the closest Part No. in a list of known references.
+     * Allows up to 2 character substitutions (OCR often confuses similar digits: 4/6, 3/8, 5/6, etc.)
+     */
+    fun findClosestMatch(detected: String, knownPartNos: List<String>): String? {
+        // First try exact match
+        knownPartNos.find { it.equals(detected, ignoreCase = true) }?.let { return it }
+
+        // Try fuzzy match with edit distance <= 2
+        var bestMatch: String? = null
+        var bestDistance = Int.MAX_VALUE
+
+        for (known in knownPartNos) {
+            if (known.length != detected.length) continue // Same length only for part numbers
+            val distance = charDifferences(detected.uppercase(), known.uppercase())
+            if (distance in 1..2 && distance < bestDistance) {
+                bestDistance = distance
+                bestMatch = known
+            }
+        }
+
+        if (bestMatch != null) {
+            Log.d(TAG, "Fuzzy match: '$detected' -> '$bestMatch' (distance: $bestDistance)")
+        }
+        return bestMatch
+    }
+
+    private fun charDifferences(a: String, b: String): Int {
+        if (a.length != b.length) return Int.MAX_VALUE
+        return a.zip(b).count { (c1, c2) -> c1 != c2 }
     }
 }
