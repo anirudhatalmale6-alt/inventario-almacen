@@ -2,178 +2,148 @@ package com.fresenius.inventario.data.remote
 
 import android.content.Context
 import com.fresenius.inventario.model.Product
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.gson.GsonFactory
-import com.google.api.services.sheets.v4.Sheets
-import com.google.api.services.sheets.v4.SheetsScopes
-import com.google.api.services.sheets.v4.model.ValueRange
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
+/**
+ * Communicates with Google Sheets via a Google Apps Script web app.
+ * No OAuth/Google Cloud setup needed - the script runs under the client's account.
+ */
 class SheetsManager(private val context: Context) {
 
-    private var sheetsService: Sheets? = null
-    private var spreadsheetId: String? = null
-
-    // Column mapping based on client's Excel structure:
-    // A=Part No., B=Description, C=Item Group, D=in Stock, E=Responsible, F=Barcode, G=Min Stock
     companion object {
-        const val COL_PART_NO = 0      // A
-        const val COL_DESCRIPTION = 1  // B
-        const val COL_ITEM_GROUP = 2   // C
-        const val COL_IN_STOCK = 3     // D
-        const val COL_RESPONSIBLE = 4  // E
-        const val COL_BARCODE = 5      // F (new column)
-        const val COL_MIN_STOCK = 6    // G (new column)
-        const val HEADER_ROW = 2       // Row 2 has headers (row 1 is title)
-        const val DATA_START_ROW = 3   // Data starts at row 3
         const val PREFS_NAME = "sheets_prefs"
-        const val PREF_SPREADSHEET_ID = "spreadsheet_id"
-        const val PREF_SHEET_NAME = "sheet_name"
+        const val PREF_SCRIPT_URL = "script_url"
     }
 
     fun isConfigured(): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(PREF_SPREADSHEET_ID, null) != null
+        return getScriptUrl() != null
     }
 
-    fun getSpreadsheetId(): String? {
+    fun getScriptUrl(): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(PREF_SPREADSHEET_ID, null)
+        return prefs.getString(PREF_SCRIPT_URL, null)
     }
 
-    fun getSheetName(): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(PREF_SHEET_NAME, "report") ?: "report"
-    }
-
-    fun saveConfig(spreadsheetId: String, sheetName: String) {
+    fun saveConfig(scriptUrl: String) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(PREF_SPREADSHEET_ID, spreadsheetId)
-            .putString(PREF_SHEET_NAME, sheetName)
+            .putString(PREF_SCRIPT_URL, scriptUrl.trim())
             .apply()
-        this.spreadsheetId = spreadsheetId
     }
 
-    private fun getService(): Sheets {
-        sheetsService?.let { return it }
+    private suspend fun callScript(params: Map<String, String>): JSONObject = withContext(Dispatchers.IO) {
+        val baseUrl = getScriptUrl() ?: throw IllegalStateException("Script URL no configurada")
+        val queryString = params.entries.joinToString("&") { (k, v) ->
+            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
+        }
+        val fullUrl = "$baseUrl?$queryString"
 
-        val account = GoogleSignIn.getLastSignedInAccount(context)
-            ?: throw IllegalStateException("No Google account signed in")
+        var connection: HttpURLConnection? = null
+        try {
+            var url = URL(fullUrl)
+            // Follow redirects (Apps Script redirects on deploy)
+            var redirectCount = 0
+            while (redirectCount < 5) {
+                connection = url.openConnection() as HttpURLConnection
+                connection.instanceFollowRedirects = false
+                connection.connectTimeout = 30000
+                connection.readTimeout = 60000
+                connection.requestMethod = "GET"
 
-        val credential = GoogleAccountCredential.usingOAuth2(
-            context, listOf(SheetsScopes.SPREADSHEETS)
-        )
-        credential.selectedAccount = account.account
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+                    responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
+                    responseCode == 307) {
+                    val newUrl = connection.getHeaderField("Location")
+                    connection.disconnect()
+                    url = URL(newUrl)
+                    redirectCount++
+                    continue
+                }
+                break
+            }
 
-        val service = Sheets.Builder(
-            NetHttpTransport(),
-            GsonFactory.getDefaultInstance(),
-            credential
-        )
-            .setApplicationName("Inventario Almacen")
-            .build()
-
-        sheetsService = service
-        return service
-    }
-
-    suspend fun loadProducts(): List<Product> = withContext(Dispatchers.IO) {
-        val service = getService()
-        val id = getSpreadsheetId() ?: throw IllegalStateException("Spreadsheet not configured")
-        val sheetName = getSheetName()
-
-        val range = "$sheetName!A${DATA_START_ROW}:G"
-        val response = service.spreadsheets().values()
-            .get(id, range)
-            .execute()
-
-        val values = response.getValues() ?: return@withContext emptyList()
-
-        values.mapIndexedNotNull { index, row ->
-            val partNo = row.getOrNull(COL_PART_NO)?.toString()?.trim() ?: return@mapIndexedNotNull null
-            if (partNo.isEmpty()) return@mapIndexedNotNull null
-
-            Product(
-                partNo = partNo,
-                description = row.getOrNull(COL_DESCRIPTION)?.toString()?.trim() ?: "",
-                itemGroup = row.getOrNull(COL_ITEM_GROUP)?.toString()?.trim() ?: "",
-                inStock = row.getOrNull(COL_IN_STOCK)?.toString()?.trim()?.toIntOrNull() ?: 0,
-                responsible = row.getOrNull(COL_RESPONSIBLE)?.toString()?.trim() ?: "",
-                barcode = row.getOrNull(COL_BARCODE)?.toString()?.trim()?.ifEmpty { null },
-                minStock = row.getOrNull(COL_MIN_STOCK)?.toString()?.trim()?.toIntOrNull() ?: 1,
-                sheetRow = index + DATA_START_ROW // actual row in sheet
-            )
+            val response = connection!!.inputStream.bufferedReader().readText()
+            JSONObject(response)
+        } finally {
+            connection?.disconnect()
         }
     }
 
-    suspend fun updateBarcode(product: Product, barcode: String) = withContext(Dispatchers.IO) {
-        val service = getService()
-        val id = getSpreadsheetId() ?: return@withContext
-        val sheetName = getSheetName()
-
-        val range = "$sheetName!F${product.sheetRow}"
-        val body = ValueRange().setValues(listOf(listOf(barcode)))
-        service.spreadsheets().values()
-            .update(id, range, body)
-            .setValueInputOption("RAW")
-            .execute()
-    }
-
-    suspend fun updateMinStock(product: Product, minStock: Int) = withContext(Dispatchers.IO) {
-        val service = getService()
-        val id = getSpreadsheetId() ?: return@withContext
-        val sheetName = getSheetName()
-
-        val range = "$sheetName!G${product.sheetRow}"
-        val body = ValueRange().setValues(listOf(listOf(minStock.toString())))
-        service.spreadsheets().values()
-            .update(id, range, body)
-            .setValueInputOption("RAW")
-            .execute()
-    }
-
-    suspend fun updateStock(product: Product, newStock: Int) = withContext(Dispatchers.IO) {
-        val service = getService()
-        val id = getSpreadsheetId() ?: return@withContext
-        val sheetName = getSheetName()
-
-        val range = "$sheetName!D${product.sheetRow}"
-        val body = ValueRange().setValues(listOf(listOf(newStock.toString())))
-        service.spreadsheets().values()
-            .update(id, range, body)
-            .setValueInputOption("RAW")
-            .execute()
-    }
-
-    suspend fun ensureHeaders() = withContext(Dispatchers.IO) {
-        val service = getService()
-        val id = getSpreadsheetId() ?: return@withContext
-        val sheetName = getSheetName()
-
-        // Check if Barcode and Min Stock headers exist
-        val range = "$sheetName!F${HEADER_ROW}:G${HEADER_ROW}"
-        val response = service.spreadsheets().values()
-            .get(id, range)
-            .execute()
-
-        val values = response.getValues()
-        val needsBarcode = values == null || values.isEmpty() ||
-                values[0].getOrNull(0)?.toString()?.trim() != "Barcode"
-
-        if (needsBarcode) {
-            val body = ValueRange().setValues(listOf(listOf("Barcode", "Min Stock")))
-            service.spreadsheets().values()
-                .update(id, range, body)
-                .setValueInputOption("RAW")
-                .execute()
+    suspend fun testConnection(): String {
+        val result = callScript(mapOf("action" to "ping"))
+        return if (result.has("error")) {
+            "Error: ${result.getString("error")}"
+        } else {
+            result.optString("message", "Conexión OK")
         }
+    }
+
+    suspend fun loadProducts(): List<Product> {
+        val result = callScript(mapOf("action" to "getProducts"))
+
+        if (result.has("error")) {
+            throw RuntimeException(result.getString("error"))
+        }
+
+        val productsArray = result.getJSONArray("products")
+        val products = mutableListOf<Product>()
+
+        for (i in 0 until productsArray.length()) {
+            val obj = productsArray.getJSONObject(i)
+            products.add(Product(
+                partNo = obj.getString("partNo"),
+                description = obj.optString("description", ""),
+                itemGroup = obj.optString("itemGroup", ""),
+                inStock = obj.optInt("inStock", 0),
+                responsible = obj.optString("responsible", ""),
+                barcode = obj.optString("barcode", "").ifEmpty { null },
+                minStock = obj.optInt("minStock", 1),
+                sheetRow = obj.getInt("sheetRow")
+            ))
+        }
+
+        return products
+    }
+
+    suspend fun updateBarcode(product: Product, barcode: String) {
+        val result = callScript(mapOf(
+            "action" to "updateBarcode",
+            "row" to product.sheetRow.toString(),
+            "barcode" to barcode
+        ))
+        if (result.has("error")) throw RuntimeException(result.getString("error"))
+    }
+
+    suspend fun updateMinStock(product: Product, minStock: Int) {
+        val result = callScript(mapOf(
+            "action" to "updateMinStock",
+            "row" to product.sheetRow.toString(),
+            "minStock" to minStock.toString()
+        ))
+        if (result.has("error")) throw RuntimeException(result.getString("error"))
+    }
+
+    suspend fun updateStock(product: Product, newStock: Int) {
+        val result = callScript(mapOf(
+            "action" to "updateStock",
+            "row" to product.sheetRow.toString(),
+            "stock" to newStock.toString()
+        ))
+        if (result.has("error")) throw RuntimeException(result.getString("error"))
+    }
+
+    suspend fun ensureHeaders() {
+        val result = callScript(mapOf("action" to "ensureHeaders"))
+        if (result.has("error")) throw RuntimeException(result.getString("error"))
     }
 
     fun clearAuth() {
-        sheetsService = null
+        // No auth to clear with Apps Script approach
     }
 }

@@ -30,43 +30,17 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:text="Configurar Google Sheets"
+                android:text="Configurar Conexión"
                 android:textSize="20sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Step 1: Sign in -->
+        <!-- Script URL -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Paso 1: Conectar cuenta de Google"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvSignInStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="No conectado"
-            android:textSize="13sp"
-            android:textColor="#666666" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSignIn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Iniciar sesión con Google"
-            app:backgroundTint="@color/primary" />
-
-        <!-- Step 2: Spreadsheet ID -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Paso 2: ID de la hoja de cálculo"
+            android:text="URL del Script"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -74,7 +48,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Puedes pegar la URL completa de Google Sheets o solo el ID"
+            android:text="Pega aquí la URL del Google Apps Script que conecta con tu hoja de cálculo"
             android:textSize="12sp"
             android:textColor="#666666" />
 
@@ -82,38 +56,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="URL o ID de Google Sheets">
+            android:hint="URL del script (https://script.google.com/...)">
 
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etSpreadsheetId"
+                android:id="@+id/etScriptUrl"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="text"
-                android:textSize="14sp" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Step 3: Sheet name -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Paso 3: Nombre de la pestaña"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:hint="Nombre de la pestaña (ej: report)">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etSheetName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="text"
-                android:text="report"
-                android:textSize="14sp" />
+                android:inputType="textUri"
+                android:textSize="13sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Buttons -->
@@ -121,7 +71,7 @@
             android:id="@+id/btnSave"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
             android:text="Guardar configuración"
             app:backgroundTint="@color/primary" />
 
@@ -147,7 +97,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Instrucciones:\n\n1. Sube tu archivo Excel a Google Drive\n2. Ábrelo con Google Sheets\n3. Copia la URL de la hoja\n4. Pégala en el campo de arriba\n5. Asegúrate de compartir la hoja con tu cuenta de Google\n\nLa app añadirá las columnas 'Barcode' y 'Min Stock' automáticamente."
+            android:text="Cómo obtener la URL:\n\n1. Abre tu hoja de cálculo en Google Sheets\n2. Ve a Extensiones > Apps Script\n3. Pega el código que te proporcioné\n4. Haz clic en Implementar > Nueva implementación\n5. Selecciona tipo: Aplicación web\n6. En 'Quién tiene acceso' selecciona: Cualquier persona\n7. Haz clic en Implementar\n8. Copia la URL y pégala aquí"
             android:textSize="13sp"
             android:textColor="#666666"
             android:lineSpacingExtra="4dp" />
