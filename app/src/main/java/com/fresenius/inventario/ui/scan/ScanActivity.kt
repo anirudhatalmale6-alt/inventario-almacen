@@ -40,6 +40,9 @@ class ScanActivity : AppCompatActivity() {
     private var isScanning = true
     private var productsLoaded = false
 
+    // For two-step linking flow
+    private var pendingLinkProduct: Product? = null
+
     private val requestPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -61,7 +64,6 @@ class ScanActivity : AppCompatActivity() {
         binding.btnBack.setOnClickListener { finish() }
         binding.btnRescan.setOnClickListener { resumeScanning() }
 
-        // Load products first, then start camera
         loadProductsAndStartCamera()
     }
 
@@ -75,10 +77,9 @@ class ScanActivity : AppCompatActivity() {
                 val count = repository.products.value.size
                 productsLoaded = true
                 binding.progressBar.visibility = View.GONE
-                binding.tvStatus.text = "$count productos cargados - Apunta la cámara a una etiqueta"
+                binding.tvStatus.text = "PASO 1: Apunta la cámara al texto 'Part No.' de la etiqueta"
                 Log.d(TAG, "Loaded $count products")
 
-                // Now start camera
                 if (ContextCompat.checkSelfPermission(this@ScanActivity, Manifest.permission.CAMERA)
                     == PackageManager.PERMISSION_GRANTED
                 ) {
@@ -89,10 +90,9 @@ class ScanActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading products: ${e.message}", e)
                 binding.progressBar.visibility = View.GONE
-                binding.tvStatus.text = "Error cargando productos: ${e.message}"
+                binding.tvStatus.text = "Error: ${e.message}"
                 Toast.makeText(this@ScanActivity,
-                    "Error conectando con Google Sheets.\nVerifica tu conexión a internet.",
-                    Toast.LENGTH_LONG).show()
+                    "Error conectando. Verifica tu conexión.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -112,11 +112,12 @@ class ScanActivity : AppCompatActivity() {
                         try {
                             handleScanResult(result)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error handling scan result: ${e.message}", e)
-                            binding.tvStatus.text = "Error: ${e.message}"
+                            Log.e(TAG, "Error handling result: ${e.message}", e)
                         }
                     }
                 }
+                // Start in OCR-only mode (Step 1)
+                scanAnalyzer?.scanMode = ScanMode.OCR_ONLY
 
                 val imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -127,10 +128,9 @@ class ScanActivity : AppCompatActivity() {
                 cameraProvider.bindToLifecycle(
                     this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageAnalysis
                 )
-                Log.d(TAG, "Camera started successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Error starting camera: ${e.message}", e)
-                Toast.makeText(this, "Error iniciando cámara: ${e.message}", Toast.LENGTH_LONG).show()
+                Log.e(TAG, "Camera error: ${e.message}", e)
+                Toast.makeText(this, "Error cámara: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -140,112 +140,137 @@ class ScanActivity : AppCompatActivity() {
         if (!productsLoaded) return
 
         val now = System.currentTimeMillis()
-        if (now - lastScanTime < 2000) return // Debounce 2 seconds
+        if (now - lastScanTime < 1500) return
         lastScanTime = now
 
-        Log.d(TAG, "Scan result: barcode=${result.barcode}, partNo=${result.partNo}, ocrText=${result.ocrFullText?.take(50)}")
+        vibrate()
 
-        // Vibrate for feedback
-        try {
-            val vibrator = getSystemService(Vibrator::class.java)
-            vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
-        } catch (e: Exception) {
-            // Vibration not critical
+        val currentMode = scanAnalyzer?.scanMode ?: ScanMode.OCR_ONLY
+
+        when (currentMode) {
+            ScanMode.OCR_ONLY -> handleOcrResult(result)
+            ScanMode.BARCODE_ONLY -> handleBarcodeResult(result)
+            ScanMode.BOTH -> handleOcrResult(result)
         }
-
-        val barcode = result.barcode
-        val partNo = result.partNo
-
-        // First check if barcode is already linked to a product
-        if (barcode != null) {
-            val existingProduct = repository.findByBarcode(barcode)
-            if (existingProduct != null) {
-                Log.d(TAG, "Found product by barcode: ${existingProduct.partNo}")
-                showProductFound(existingProduct, barcode)
-                return
-            }
-        }
-
-        // If we got a Part No. from OCR, look it up (includes fuzzy matching)
-        if (partNo != null) {
-            val product = repository.findByPartNo(partNo)
-            if (product != null) {
-                val fuzzyNote = if (!product.partNo.equals(partNo, ignoreCase = true)) {
-                    Log.d(TAG, "Fuzzy match: OCR read '$partNo', matched to '${product.partNo}'")
-                    " (OCR leyó: $partNo)"
-                } else ""
-                Log.d(TAG, "Found product by Part No: ${product.partNo}$fuzzyNote")
-                if (barcode != null && product.barcode.isNullOrEmpty()) {
-                    showLinkBarcodeDialog(product, barcode, fuzzyNote)
-                } else {
-                    showProductFound(product, barcode, fuzzyNote)
-                }
-                return
-            }
-        }
-
-        // Nothing found - show what was detected
-        isScanning = false
-        binding.resultCard.visibility = View.VISIBLE
-        binding.tvResultTitle.text = "No encontrado en la base de datos"
-        binding.tvResultPartNo.text = "Ref detectada: ${partNo ?: "No detectada"}"
-        binding.tvResultBarcode.text = "Código: ${barcode ?: "No detectado"}"
-        binding.tvResultDescription.text = if (!result.ocrFullText.isNullOrEmpty())
-            "Texto OCR detectado:\n${result.ocrFullText.take(300)}" else "No se detectó texto"
-        binding.tvResultStock.text = ""
-        binding.layoutActions.visibility = View.GONE
-        binding.btnRescan.visibility = View.VISIBLE
     }
 
-    private fun showProductFound(product: Product, barcode: String?, fuzzyNote: String = "") {
-        isScanning = false
+    // STEP 1: OCR detected a Part No.
+    private fun handleOcrResult(result: ScanResult) {
+        val partNo = result.partNo ?: return
+
+        Log.d(TAG, "OCR detected Part No: $partNo")
+
+        val product = repository.findByPartNo(partNo)
+        if (product != null) {
+            val fuzzyNote = if (!product.partNo.equals(partNo, ignoreCase = true)) {
+                " (OCR leyó: $partNo)"
+            } else ""
+
+            isScanning = false
+
+            if (product.barcode.isNullOrEmpty()) {
+                // Product found but no barcode linked - offer to scan barcode
+                showScanBarcodePrompt(product, fuzzyNote)
+            } else {
+                // Product already has barcode linked
+                showProductFound(product, product.barcode, fuzzyNote)
+            }
+        } else {
+            // Not found
+            isScanning = false
+            binding.resultCard.visibility = View.VISIBLE
+            binding.tvResultTitle.text = "No encontrado en la base de datos"
+            binding.tvResultPartNo.text = "Ref detectada: $partNo"
+            binding.tvResultBarcode.text = ""
+            binding.tvResultDescription.text = "Esta referencia no existe en tu hoja de cálculo.\nVerifica que el producto esté en tu Excel."
+            binding.tvResultStock.text = ""
+            binding.layoutActions.visibility = View.GONE
+            binding.btnRescan.visibility = View.VISIBLE
+        }
+    }
+
+    // Show prompt to scan barcode (Step 2)
+    private fun showScanBarcodePrompt(product: Product, fuzzyNote: String) {
+        pendingLinkProduct = product
+
         binding.resultCard.visibility = View.VISIBLE
         binding.tvResultTitle.text = "Producto encontrado"
         binding.tvResultPartNo.text = "Ref: ${product.partNo}$fuzzyNote"
-        binding.tvResultBarcode.text = "Código: ${product.barcode ?: barcode ?: "Sin código"}"
+        binding.tvResultBarcode.text = "Sin código de barras vinculado"
         binding.tvResultDescription.text = product.description
-        binding.tvResultStock.text = "Stock: ${product.inStock} | Mínimo: ${product.minStock} | Grupo: ${product.itemGroup}"
+        binding.tvResultStock.text = "Stock: ${product.inStock} | Grupo: ${product.itemGroup}"
+
+        // Show "Scan barcode" button instead of entry/exit
         binding.layoutActions.visibility = View.VISIBLE
+        binding.btnEntry.text = "Escanear código de barras"
+        binding.btnEntry.setOnClickListener { startBarcodeScan() }
+        binding.btnExit.visibility = View.GONE
         binding.btnRescan.visibility = View.VISIBLE
 
-        if (product.inStock < product.minStock) {
-            binding.tvResultStock.setTextColor(ContextCompat.getColor(this, R.color.stock_low))
-        } else {
-            binding.tvResultStock.setTextColor(ContextCompat.getColor(this, R.color.stock_ok))
-        }
-
-        binding.btnEntry.setOnClickListener { showStockDialog(product, true) }
-        binding.btnExit.setOnClickListener { showStockDialog(product, false) }
+        binding.tvStatus.text = "Producto encontrado. Pulsa el botón para escanear el código de barras."
     }
 
-    private fun showLinkBarcodeDialog(product: Product, barcode: String, fuzzyNote: String = "") {
-        isScanning = false
+    // Switch to barcode-only scanning mode
+    private fun startBarcodeScan() {
+        isScanning = true
+        scanAnalyzer?.scanMode = ScanMode.BARCODE_ONLY
+        binding.resultCard.visibility = View.GONE
+        binding.tvStatus.text = "PASO 2: Apunta la cámara al CÓDIGO DE BARRAS de la etiqueta"
 
+        Toast.makeText(this,
+            "Apunta directamente al código de barras", Toast.LENGTH_LONG).show()
+    }
+
+    // STEP 2: Barcode detected
+    private fun handleBarcodeResult(result: ScanResult) {
+        val barcode = result.barcode ?: return
+        val product = pendingLinkProduct ?: return
+
+        Log.d(TAG, "Barcode detected for linking: $barcode -> ${product.partNo}")
+
+        isScanning = false
+        scanAnalyzer?.scanMode = ScanMode.OCR_ONLY // Reset for next scan
+
+        // Check if barcode is already linked to another product
+        val existingProduct = repository.findByBarcode(barcode)
+        if (existingProduct != null && existingProduct.partNo != product.partNo) {
+            AlertDialog.Builder(this)
+                .setTitle("Código ya vinculado")
+                .setMessage("Este código de barras ya está vinculado a:\n${existingProduct.partNo} - ${existingProduct.description}\n\n¿Quieres reasignarlo a ${product.partNo}?")
+                .setPositiveButton("Sí, reasignar") { _, _ -> linkBarcodeAndSetMinStock(product, barcode) }
+                .setNegativeButton("No, cancelar") { _, _ -> resumeScanning() }
+                .show()
+            return
+        }
+
+        // Show confirmation dialog
         AlertDialog.Builder(this)
             .setTitle("Vincular código de barras")
             .setMessage(
-                "Se detectó:\n\n" +
                 "Referencia: ${product.partNo}\n" +
                 "Descripción: ${product.description}\n" +
                 "Código de barras: $barcode\n\n" +
                 "¿Vincular este código de barras a esta pieza?"
             )
-            .setPositiveButton("Sí, vincular") { _, _ ->
-                lifecycleScope.launch {
-                    try {
-                        repository.linkBarcode(product, barcode)
-                        showMinStockDialog(product, barcode)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error linking barcode: ${e.message}", e)
-                        Toast.makeText(this@ScanActivity,
-                            "Error vinculando: ${e.message}", Toast.LENGTH_LONG).show()
-                        resumeScanning()
-                    }
-                }
-            }
+            .setPositiveButton("Sí, vincular") { _, _ -> linkBarcodeAndSetMinStock(product, barcode) }
             .setNegativeButton("Cancelar") { _, _ -> resumeScanning() }
             .setCancelable(false)
             .show()
+    }
+
+    private fun linkBarcodeAndSetMinStock(product: Product, barcode: String) {
+        // First link barcode, then ask for min stock
+        lifecycleScope.launch {
+            try {
+                repository.linkBarcode(product, barcode)
+                showMinStockDialog(product, barcode)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error linking: ${e.message}", e)
+                Toast.makeText(this@ScanActivity,
+                    "Error vinculando: ${e.message}", Toast.LENGTH_LONG).show()
+                resumeScanning()
+            }
+        }
     }
 
     private fun showMinStockDialog(product: Product, barcode: String) {
@@ -254,7 +279,6 @@ class ScanActivity : AppCompatActivity() {
             setText(product.minStock.toString())
             hint = "Stock mínimo"
         }
-
         val padding = (20 * resources.displayMetrics.density).toInt()
         val container = android.widget.FrameLayout(this).apply {
             setPadding(padding, padding / 2, padding, 0)
@@ -273,9 +297,9 @@ class ScanActivity : AppCompatActivity() {
                         Toast.makeText(this@ScanActivity,
                             "Vinculado: ${product.partNo} -> $barcode\nStock mínimo: $minStock",
                             Toast.LENGTH_LONG).show()
+                        pendingLinkProduct = null
                         showProductFound(product, barcode)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error setting min stock: ${e.message}", e)
                         Toast.makeText(this@ScanActivity,
                             "Error: ${e.message}", Toast.LENGTH_LONG).show()
                         resumeScanning()
@@ -286,6 +310,31 @@ class ScanActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showProductFound(product: Product, barcode: String?, fuzzyNote: String = "") {
+        isScanning = false
+        binding.resultCard.visibility = View.VISIBLE
+        binding.tvResultTitle.text = "Producto encontrado"
+        binding.tvResultPartNo.text = "Ref: ${product.partNo}$fuzzyNote"
+        binding.tvResultBarcode.text = "Código: ${product.barcode ?: barcode ?: "Sin código"}"
+        binding.tvResultDescription.text = product.description
+        binding.tvResultStock.text = "Stock: ${product.inStock} | Mínimo: ${product.minStock} | Grupo: ${product.itemGroup}"
+
+        // Show entry/exit buttons
+        binding.layoutActions.visibility = View.VISIBLE
+        binding.btnEntry.text = "+ Entrada"
+        binding.btnExit.visibility = View.VISIBLE
+        binding.btnRescan.visibility = View.VISIBLE
+
+        if (product.inStock < product.minStock) {
+            binding.tvResultStock.setTextColor(ContextCompat.getColor(this, R.color.stock_low))
+        } else {
+            binding.tvResultStock.setTextColor(ContextCompat.getColor(this, R.color.stock_ok))
+        }
+
+        binding.btnEntry.setOnClickListener { showStockDialog(product, true) }
+        binding.btnExit.setOnClickListener { showStockDialog(product, false) }
+    }
+
     private fun showStockDialog(product: Product, isEntry: Boolean) {
         val title = if (isEntry) "Entrada de stock" else "Salida de stock"
         val input = android.widget.EditText(this).apply {
@@ -293,7 +342,6 @@ class ScanActivity : AppCompatActivity() {
             setText("1")
             hint = "Cantidad"
         }
-
         val padding = (20 * resources.displayMetrics.density).toInt()
         val container = android.widget.FrameLayout(this).apply {
             setPadding(padding, padding / 2, padding, 0)
@@ -323,12 +371,10 @@ class ScanActivity : AppCompatActivity() {
                                 "ALERTA: Stock bajo mínimo (${product.minStock})",
                                 Toast.LENGTH_LONG).show()
                         }
-
                         showProductFound(product, product.barcode)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error updating stock: ${e.message}", e)
                         Toast.makeText(this@ScanActivity,
-                            "Error actualizando stock: ${e.message}", Toast.LENGTH_LONG).show()
+                            "Error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -338,8 +384,18 @@ class ScanActivity : AppCompatActivity() {
 
     private fun resumeScanning() {
         isScanning = true
+        pendingLinkProduct = null
+        scanAnalyzer?.scanMode = ScanMode.OCR_ONLY
         binding.resultCard.visibility = View.GONE
-        binding.tvStatus.text = "Apunta la cámara a una etiqueta..."
+        binding.btnExit.visibility = View.VISIBLE
+        binding.tvStatus.text = "PASO 1: Apunta la cámara al texto 'Part No.' de la etiqueta"
+    }
+
+    private fun vibrate() {
+        try {
+            val vibrator = getSystemService(Vibrator::class.java)
+            vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+        } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
