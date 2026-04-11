@@ -42,6 +42,9 @@ function handleRequest(e) {
       case "updateStock":
         result = updateStock(e.parameter.row, e.parameter.stock);
         break;
+      case "addProduct":
+        result = addProduct(e.parameter.partNo, e.parameter.description, e.parameter.itemGroup, e.parameter.barcode, e.parameter.minStock);
+        break;
       case "ensureHeaders":
         result = ensureHeaders();
         break;
@@ -117,6 +120,26 @@ function updateStock(row, stock) {
   stock = parseInt(stock);
   sheet.getRange(row, COL_IN_STOCK).setValue(stock);
   return { status: "ok", message: "Stock actualizado en fila " + row };
+}
+
+function addProduct(partNo, description, itemGroup, barcode, minStock) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  var newRow = lastRow + 1;
+
+  sheet.getRange(newRow, COL_PART_NO).setValue(partNo || "");
+  sheet.getRange(newRow, COL_DESCRIPTION).setValue(description || "");
+  sheet.getRange(newRow, COL_ITEM_GROUP).setValue(itemGroup || "");
+  sheet.getRange(newRow, COL_IN_STOCK).setValue(0);
+  sheet.getRange(newRow, COL_RESPONSIBLE).setValue("");
+  sheet.getRange(newRow, COL_BARCODE).setValue(barcode || "");
+  sheet.getRange(newRow, COL_MIN_STOCK).setValue(parseInt(minStock) || 1);
+
+  return {
+    status: "ok",
+    message: "Producto creado en fila " + newRow,
+    sheetRow: newRow
+  };
 }
 
 function ensureHeaders() {

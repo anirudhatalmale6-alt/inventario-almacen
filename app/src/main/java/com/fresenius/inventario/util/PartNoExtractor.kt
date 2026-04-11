@@ -65,7 +65,17 @@ object PartNoExtractor {
         // 1. Exact match
         knownPartNos.find { it.equals(detectedUpper, ignoreCase = true) }?.let { return it }
 
-        // 2. Detected is prefix of a known Part No. (missing trailing digits)
+        // 2. Trailing "1" rule: M-prefixed and numeric-only refs in Excel end in "1",
+        //    but labels often omit it. F-prefixed refs do NOT get trailing "1".
+        if (!detectedUpper.startsWith("F")) {
+            val withTrailing1 = detectedUpper + "1"
+            knownPartNos.find { it.equals(withTrailing1, ignoreCase = true) }?.let {
+                Log.d(TAG, "Trailing-1 match: '$detected' -> '$it'")
+                return it
+            }
+        }
+
+        // 3. Detected is prefix of a known Part No. (missing trailing digits)
         //    e.g., M46523 matches M465231
         val prefixMatches = knownPartNos.filter {
             it.uppercase().startsWith(detectedUpper) && it.length <= detectedUpper.length + 2
@@ -75,7 +85,7 @@ object PartNoExtractor {
             return prefixMatches[0]
         }
 
-        // 3. Known Part No. is prefix of detected (extra trailing digits from OCR)
+        // 4. Known Part No. is prefix of detected (extra trailing digits from OCR)
         //    e.g., M4652310 matches M465231
         val suffixMatches = knownPartNos.filter {
             detectedUpper.startsWith(it.uppercase()) && detectedUpper.length <= it.length + 2
@@ -85,7 +95,7 @@ object PartNoExtractor {
             return suffixMatches[0]
         }
 
-        // 4. Same length, up to 2 character differences (OCR misread digits)
+        // 5. Same length, up to 2 character differences (OCR misread digits)
         var bestMatch: String? = null
         var bestDistance = Int.MAX_VALUE
 

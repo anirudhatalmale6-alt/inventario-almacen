@@ -176,16 +176,9 @@ class ScanActivity : AppCompatActivity() {
                 showProductFound(product, product.barcode, fuzzyNote)
             }
         } else {
-            // Not found
+            // Not found - offer to create
             isScanning = false
-            binding.resultCard.visibility = View.VISIBLE
-            binding.tvResultTitle.text = "No encontrado en la base de datos"
-            binding.tvResultPartNo.text = "Ref detectada: $partNo"
-            binding.tvResultBarcode.text = ""
-            binding.tvResultDescription.text = "Esta referencia no existe en tu hoja de cálculo.\nVerifica que el producto esté en tu Excel."
-            binding.tvResultStock.text = ""
-            binding.layoutActions.visibility = View.GONE
-            binding.btnRescan.visibility = View.VISIBLE
+            showCreateProductPrompt(partNo)
         }
     }
 
@@ -208,6 +201,91 @@ class ScanActivity : AppCompatActivity() {
         binding.btnRescan.visibility = View.VISIBLE
 
         binding.tvStatus.text = "Producto encontrado. Pulsa el botón para escanear el código de barras."
+    }
+
+    // Product not found - offer to create it
+    private fun showCreateProductPrompt(partNo: String) {
+        binding.resultCard.visibility = View.VISIBLE
+        binding.tvResultTitle.text = "Referencia no encontrada"
+        binding.tvResultPartNo.text = "Ref detectada: $partNo"
+        binding.tvResultBarcode.text = ""
+        binding.tvResultDescription.text = "Esta referencia no existe en tu hoja de cálculo."
+        binding.tvResultStock.text = ""
+
+        binding.layoutActions.visibility = View.VISIBLE
+        binding.btnEntry.text = "Crear producto nuevo"
+        binding.btnEntry.setOnClickListener { showCreateProductDialog(partNo) }
+        binding.btnExit.visibility = View.GONE
+        binding.btnRescan.visibility = View.VISIBLE
+
+        binding.tvStatus.text = "Producto no encontrado. Puedes crearlo o escanear otra etiqueta."
+    }
+
+    private fun showCreateProductDialog(partNo: String) {
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val padding = (20 * resources.displayMetrics.density).toInt()
+            setPadding(padding, padding / 2, padding, 0)
+        }
+
+        val etPartNo = android.widget.EditText(this).apply {
+            hint = "Referencia (Part No.)"
+            setText(partNo)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+        }
+        layout.addView(etPartNo)
+
+        val etDescription = android.widget.EditText(this).apply {
+            hint = "Descripción"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        layout.addView(etDescription)
+
+        val etGroup = android.widget.EditText(this).apply {
+            hint = "Grupo (ej: SP 5008, SP Small Parts...)"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        layout.addView(etGroup)
+
+        val etMinStock = android.widget.EditText(this).apply {
+            hint = "Stock mínimo"
+            setText("1")
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        layout.addView(etMinStock)
+
+        AlertDialog.Builder(this)
+            .setTitle("Crear producto nuevo")
+            .setView(layout)
+            .setPositiveButton("Crear y escanear código") { _, _ ->
+                val newPartNo = etPartNo.text.toString().trim()
+                val desc = etDescription.text.toString().trim()
+                val group = etGroup.text.toString().trim()
+                val minStock = etMinStock.text.toString().toIntOrNull() ?: 1
+
+                if (newPartNo.isEmpty()) {
+                    Toast.makeText(this, "La referencia es obligatoria", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                lifecycleScope.launch {
+                    try {
+                        binding.tvStatus.text = "Creando producto..."
+                        val product = repository.addProduct(newPartNo, desc, group, "", minStock)
+                        Toast.makeText(this@ScanActivity,
+                            "Producto $newPartNo creado", Toast.LENGTH_SHORT).show()
+                        // Now offer to scan barcode for this new product
+                        showScanBarcodePrompt(product, "")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error creating product: ${e.message}", e)
+                        Toast.makeText(this@ScanActivity,
+                            "Error creando: ${e.message}", Toast.LENGTH_LONG).show()
+                        resumeScanning()
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar") { _, _ -> resumeScanning() }
+            .show()
     }
 
     // Switch to barcode-only scanning mode

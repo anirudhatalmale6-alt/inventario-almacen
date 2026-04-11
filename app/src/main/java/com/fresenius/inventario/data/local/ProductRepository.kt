@@ -56,6 +56,22 @@ class ProductRepository(context: Context) {
         sheetsManager.updateStock(product, newStock)
     }
 
+    suspend fun addProduct(partNo: String, description: String, itemGroup: String, barcode: String, minStock: Int): Product {
+        val sheetRow = sheetsManager.addProduct(partNo, description, itemGroup, barcode, minStock)
+        val product = Product(
+            partNo = partNo,
+            description = description,
+            itemGroup = itemGroup,
+            inStock = 0,
+            responsible = "",
+            barcode = barcode.ifEmpty { null },
+            minStock = minStock,
+            sheetRow = sheetRow
+        )
+        _products.value = _products.value + product
+        return product
+    }
+
     fun getProductsWithLowStock(): List<Product> {
         return _products.value.filter { it.inStock < it.minStock }
     }

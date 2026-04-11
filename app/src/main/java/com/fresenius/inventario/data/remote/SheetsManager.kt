@@ -138,6 +138,19 @@ class SheetsManager(private val context: Context) {
         if (result.has("error")) throw RuntimeException(result.getString("error"))
     }
 
+    suspend fun addProduct(partNo: String, description: String, itemGroup: String, barcode: String, minStock: Int): Int {
+        val result = callScript(mapOf(
+            "action" to "addProduct",
+            "partNo" to partNo,
+            "description" to description,
+            "itemGroup" to itemGroup,
+            "barcode" to barcode,
+            "minStock" to minStock.toString()
+        ))
+        if (result.has("error")) throw RuntimeException(result.getString("error"))
+        return result.optInt("sheetRow", -1)
+    }
+
     suspend fun ensureHeaders() {
         val result = callScript(mapOf("action" to "ensureHeaders"))
         if (result.has("error")) throw RuntimeException(result.getString("error"))
