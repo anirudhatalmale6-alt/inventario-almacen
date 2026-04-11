@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.fresenius.inventario.model.ScanResult
+import com.fresenius.inventario.util.Gs1Barcode
 import com.fresenius.inventario.util.PartNoExtractor
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -157,10 +158,12 @@ class ScanAnalyzer(
     ) {
         try {
             val partNo = ocrText?.let { PartNoExtractor.extract(it) }
+            // Clean GS1-128 barcode: strip ]C1 prefix, format AIs with parentheses
+            val cleanBarcode = Gs1Barcode.clean(barcode)
 
-            if (barcode != null || partNo != null) {
+            if (cleanBarcode != null || partNo != null) {
                 val result = ScanResult(
-                    barcode = barcode,
+                    barcode = cleanBarcode,
                     barcodeFormat = barcodeFormat,
                     partNo = partNo,
                     ocrFullText = ocrText
