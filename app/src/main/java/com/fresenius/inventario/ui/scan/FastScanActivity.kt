@@ -3,15 +3,10 @@ package com.fresenius.inventario.ui.scan
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.text.InputType
 import android.util.Log
 import android.view.View
-import android.view.WindowManager
-import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -30,14 +25,15 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Fast barcode-only scan activity for registering entries/exits.
- * Designed for speed: scan barcode -> identify product -> enter quantity -> done.
- * Uses sounds for immediate feedback (success beep / error tone).
+ * Fast barcode-only scan activity - works like a supermarket scanner.
+ * Scan barcode -> beep -> auto-add 1 unit -> ready for next scan.
+ * No keyboard, no buttons to press. Just scan and go.
  */
 class FastScanActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "FastScanActivity"
+        private const val FEEDBACK_DURATION = 1500L // ms to show feedback
     }
 
     private lateinit var binding: ActivityFastScanBinding
@@ -48,6 +44,8 @@ class FastScanActivity : AppCompatActivity() {
     private var lastScanTime = 0L
     private var isScanning = true
     private var productsLoaded = false
+    // Track: true = entrada mode, false = salida mode
+    private var isEntryMode = true
 
     private val requestPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -69,9 +67,33 @@ class FastScanActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         binding.btnBack.setOnClickListener { finish() }
-        binding.btnRescan.setOnClickListener { resumeScanning() }
+
+        // Entry/Exit mode toggle buttons
+        binding.btnEntry.setOnClickListener {
+            isEntryMode = true
+            updateModeButtons()
+        }
+        binding.btnExit.setOnClickListener {
+            isEntryMode = false
+            updateModeButtons()
+        }
+
+        // Start in entry mode
+        updateModeButtons()
 
         loadProductsAndStartCamera()
+    }
+
+    private fun updateModeButtons() {
+        if (isEntryMode) {
+            binding.btnEntry.alpha = 1.0f
+            binding.btnExit.alpha = 0.4f
+            binding.tvStatus.text = "ENTRADA: Escanea el codigo de barras"
+        } else {
+            binding.btnEntry.alpha = 0.4f
+            binding.btnExit.alpha = 1.0f
+            binding.tvStatus.text = "SALIDA: Escanea el codigo de barras"
+        }
     }
 
     private fun loadProductsAndStartCamera() {
@@ -81,10 +103,9 @@ class FastScanActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 repository.refresh()
-                val count = repository.products.value.size
                 productsLoaded = true
                 binding.progressBar.visibility = View.GONE
-                binding.tvStatus.text = "Escanea el codigo de barras"
+                updateModeButtons()
 
                 if (ContextCompat.checkSelfPermission(this@FastScanActivity, Manifest.permission.CAMERA)
                     == PackageManager.PERMISSION_GRANTED
@@ -120,7 +141,6 @@ class FastScanActivity : AppCompatActivity() {
                         }
                     }
                 }
-                // Barcode-only mode for fast scanning
                 scanAnalyzer?.scanMode = ScanMode.BARCODE_ONLY
 
                 val imageAnalysis = ImageAnalysis.Builder()
@@ -149,129 +169,87 @@ class FastScanActivity : AppCompatActivity() {
 
         Log.d(TAG, "Barcode scanned: $barcode")
 
-        // Find product by barcode
+        // Find product by barcode (matches by GTIN, ignores date)
         val product = repository.findByBarcode(barcode)
         if (product != null) {
-            // SUCCESS - product found
-            isScanning = false
+            // SUCCESS - auto add/remove 1 unit
             soundManager.playSuccess()
-            showProductFound(product)
+            autoUpdateStock(product)
         } else {
             // ERROR - barcode not recognized
             soundManager.playError()
-            showError("Codigo no reconocido:\n$barcode")
+            showFeedback(
+                "Codigo no reconocido",
+                0xCC_C62828.toInt(), // red
+                barcode
+            )
         }
     }
 
-    private fun showProductFound(product: Product) {
-        binding.layoutResult.visibility = View.VISIBLE
-        binding.btnRescan.visibility = View.VISIBLE
-
-        binding.tvProductInfo.text = product.partNo
-        binding.tvProductDesc.text = product.description
-        binding.tvStockInfo.text = "Stock: ${product.inStock} | Min: ${product.minStock}"
-
-        if (product.inStock < product.minStock) {
-            binding.tvStockInfo.setTextColor(ContextCompat.getColor(this, R.color.stock_low))
+    private fun autoUpdateStock(product: Product) {
+        val newStock = if (isEntryMode) {
+            product.inStock + 1
         } else {
-            binding.tvStockInfo.setTextColor(ContextCompat.getColor(this, R.color.stock_ok))
+            (product.inStock - 1).coerceAtLeast(0)
         }
 
-        binding.btnEntry.setOnClickListener { showStockDialog(product, true) }
-        binding.btnExit.setOnClickListener { showStockDialog(product, false) }
+        val action = if (isEntryMode) "+1" else "-1"
 
-        binding.tvStatus.text = product.partNo + " - " + product.description
-        binding.tvFeedback.visibility = View.GONE
+        lifecycleScope.launch {
+            try {
+                repository.updateStock(product, newStock)
+
+                val actionText = if (isEntryMode) "1 Unidad sumada al stock" else "1 Unidad restada del stock"
+                val bgColor = if (isEntryMode) 0xCC_2E7D32.toInt() else 0xCC_E65100.toInt()
+
+                showFeedback(
+                    "$actionText\n${product.partNo}\nStock: $newStock",
+                    bgColor,
+                    null
+                )
+
+                // Show low stock warning
+                if (newStock < product.minStock) {
+                    binding.tvProductDesc.text = "ALERTA: Stock bajo minimo (min: ${product.minStock})"
+                    binding.tvProductDesc.setTextColor(ContextCompat.getColor(this@FastScanActivity, R.color.stock_low))
+                }
+
+            } catch (e: Exception) {
+                soundManager.playError()
+                showFeedback(
+                    "Error: ${e.message}",
+                    0xCC_C62828.toInt(),
+                    null
+                )
+            }
+        }
     }
 
-    private fun showError(message: String) {
-        // Show large error overlay on camera
+    private fun showFeedback(message: String, bgColor: Int, subtitle: String?) {
+        // Show large feedback overlay on camera
         binding.tvFeedback.text = message
-        binding.tvFeedback.setBackgroundColor(0xCC_C62828.toInt()) // semi-transparent red
+        binding.tvFeedback.setBackgroundColor(bgColor)
         binding.tvFeedback.visibility = View.VISIBLE
 
-        // Hide after 2 seconds
-        binding.tvFeedback.postDelayed({
-            binding.tvFeedback.visibility = View.GONE
-        }, 2000)
+        // Show product info at bottom
+        binding.tvProductInfo.text = message.split("\n").firstOrNull() ?: ""
+        binding.tvProductDesc.text = subtitle ?: ""
+        binding.layoutResult.visibility = View.VISIBLE
+
+        // Auto-hide and resume scanning after delay
+        binding.tvFeedback.removeCallbacks(resumeRunnable)
+        binding.tvFeedback.postDelayed(resumeRunnable, FEEDBACK_DURATION)
     }
 
-    private fun showStockDialog(product: Product, isEntry: Boolean) {
-        val title = if (isEntry) "Entrada de stock" else "Salida de stock"
-
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER
-            hint = "Cantidad"
-            setText("") // Empty - user types directly
-            requestFocus()
-        }
-
-        val padding = (20 * resources.displayMetrics.density).toInt()
-        val container = FrameLayout(this).apply {
-            setPadding(padding, padding / 2, padding, 0)
-            addView(input)
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage("${product.partNo} - ${product.description}\nStock actual: ${product.inStock}")
-            .setView(container)
-            .setPositiveButton("Confirmar") { _, _ ->
-                val qty = input.text.toString().toIntOrNull() ?: 0
-                if (qty <= 0) {
-                    Toast.makeText(this, "Introduce una cantidad valida", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-
-                val newStock = if (isEntry) product.inStock + qty else (product.inStock - qty).coerceAtLeast(0)
-
-                lifecycleScope.launch {
-                    try {
-                        repository.updateStock(product, newStock)
-                        soundManager.playSuccess()
-                        val action = if (isEntry) "Entrada" else "Salida"
-                        Toast.makeText(this@FastScanActivity,
-                            "$action: $qty uds. | Nuevo stock: $newStock",
-                            Toast.LENGTH_SHORT).show()
-
-                        if (newStock < product.minStock) {
-                            Toast.makeText(this@FastScanActivity,
-                                "ALERTA: Stock bajo minimo (${product.minStock})",
-                                Toast.LENGTH_LONG).show()
-                        }
-
-                        // Update displayed stock
-                        binding.tvStockInfo.text = "Stock: $newStock | Min: ${product.minStock}"
-                        if (newStock < product.minStock) {
-                            binding.tvStockInfo.setTextColor(ContextCompat.getColor(this@FastScanActivity, R.color.stock_low))
-                        } else {
-                            binding.tvStockInfo.setTextColor(ContextCompat.getColor(this@FastScanActivity, R.color.stock_ok))
-                        }
-                    } catch (e: Exception) {
-                        soundManager.playError()
-                        Toast.makeText(this@FastScanActivity,
-                            "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .create()
-
-        // Auto-show keyboard when dialog opens
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-        dialog.show()
-    }
-
-    private fun resumeScanning() {
-        isScanning = true
-        binding.layoutResult.visibility = View.GONE
-        binding.btnRescan.visibility = View.GONE
+    private val resumeRunnable = Runnable {
         binding.tvFeedback.visibility = View.GONE
-        binding.tvStatus.text = "Escanea el codigo de barras"
+        binding.layoutResult.visibility = View.GONE
+        updateModeButtons()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        binding.tvFeedback.removeCallbacks(resumeRunnable)
         cameraExecutor.shutdown()
         scanAnalyzer?.close()
         soundManager.release()

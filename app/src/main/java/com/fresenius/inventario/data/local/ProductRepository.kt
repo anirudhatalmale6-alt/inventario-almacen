@@ -3,6 +3,7 @@ package com.fresenius.inventario.data.local
 import android.content.Context
 import com.fresenius.inventario.data.remote.SheetsManager
 import com.fresenius.inventario.model.Product
+import com.fresenius.inventario.util.Gs1Barcode
 import com.fresenius.inventario.util.PartNoExtractor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,9 +37,20 @@ class ProductRepository(context: Context) {
     }
 
     fun findByBarcode(barcode: String): Product? {
-        return _products.value.find {
+        // First try exact match
+        _products.value.find {
             it.barcode?.equals(barcode, ignoreCase = true) == true
+        }?.let { return it }
+
+        // Then try matching by GTIN only (ignore date portion after (13))
+        val scannedGtin = Gs1Barcode.extractGtin(barcode)
+        if (scannedGtin != null) {
+            return _products.value.find { product ->
+                val storedGtin = Gs1Barcode.extractGtin(product.barcode)
+                storedGtin != null && storedGtin.equals(scannedGtin, ignoreCase = true)
+            }
         }
+        return null
     }
 
     suspend fun linkBarcode(product: Product, barcode: String) {

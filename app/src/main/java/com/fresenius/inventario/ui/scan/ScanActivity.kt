@@ -292,10 +292,7 @@ class ScanActivity : AppCompatActivity() {
         isScanning = true
         scanAnalyzer?.scanMode = ScanMode.BARCODE_ONLY
         binding.resultCard.visibility = View.GONE
-        binding.tvStatus.text = "PASO 2: Apunta la cámara al CÓDIGO DE BARRAS de la etiqueta"
-
-        Toast.makeText(this,
-            "Apunta directamente al código de barras", Toast.LENGTH_LONG).show()
+        binding.tvStatus.text = "PASO 2: Apunta al CODIGO DE BARRAS"
     }
 
     // STEP 2: Barcode detected
@@ -336,13 +333,14 @@ class ScanActivity : AppCompatActivity() {
     }
 
     private fun linkBarcodeAndSetMinStock(product: Product, barcode: String) {
-        // First link barcode, then ask for min stock
+        // Link barcode, set min stock, and auto-add 1 unit (the piece is in hand)
         lifecycleScope.launch {
             try {
                 repository.linkBarcode(product, barcode)
                 showMinStockDialog(product, barcode)
             } catch (e: Exception) {
                 Log.e(TAG, "Error linking: ${e.message}", e)
+                soundManager.playError()
                 Toast.makeText(this@ScanActivity,
                     "Error vinculando: ${e.message}", Toast.LENGTH_LONG).show()
                 resumeScanning()
@@ -354,7 +352,8 @@ class ScanActivity : AppCompatActivity() {
         val input = android.widget.EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
             setText(product.minStock.toString())
-            hint = "Stock mínimo"
+            hint = "Stock minimo"
+            requestFocus()
         }
         val padding = (20 * resources.displayMetrics.density).toInt()
         val container = android.widget.FrameLayout(this).apply {
@@ -362,21 +361,24 @@ class ScanActivity : AppCompatActivity() {
             addView(input)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("Stock mínimo")
-            .setMessage("Define el stock mínimo para:\n${product.partNo} - ${product.description}")
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Stock minimo")
+            .setMessage("Define el stock minimo para:\n${product.partNo} - ${product.description}")
             .setView(container)
             .setPositiveButton("Guardar") { _, _ ->
                 val minStock = input.text.toString().toIntOrNull() ?: 1
                 lifecycleScope.launch {
                     try {
                         repository.setMinStock(product, minStock)
-                        Toast.makeText(this@ScanActivity,
-                            "Vinculado: ${product.partNo} -> $barcode\nStock mínimo: $minStock",
-                            Toast.LENGTH_LONG).show()
+                        // Auto-add 1 unit: the piece is physically in hand
+                        val newStock = product.inStock + 1
+                        repository.updateStock(product, newStock)
+                        soundManager.playSuccess()
                         pendingLinkProduct = null
                         showProductFound(product, barcode)
+                        binding.tvStatus.text = "Vinculado + 1 unidad sumada al stock"
                     } catch (e: Exception) {
+                        soundManager.playError()
                         Toast.makeText(this@ScanActivity,
                             "Error: ${e.message}", Toast.LENGTH_LONG).show()
                         resumeScanning()
@@ -384,7 +386,10 @@ class ScanActivity : AppCompatActivity() {
                 }
             }
             .setCancelable(false)
-            .show()
+            .create()
+
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dialog.show()
     }
 
     private fun showProductFound(product: Product, barcode: String?, fuzzyNote: String = "") {
