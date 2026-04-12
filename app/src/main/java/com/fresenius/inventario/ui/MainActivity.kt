@@ -1,8 +1,11 @@
 package com.fresenius.inventario.ui
 
+import android.content.ContentValues
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.MediaStore
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -204,10 +207,25 @@ class MainActivity : AppCompatActivity() {
 
                 val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
                 val fileName = "stock_bajo_${dateFormat.format(Date())}.xlsx"
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val file = File(downloadsDir, fileName)
 
-                FileOutputStream(file).use { workbook.write(it) }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // Android 10+: use MediaStore
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                        put(MediaStore.Downloads.MIME_TYPE,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                    }
+                    val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    uri?.let {
+                        contentResolver.openOutputStream(it)?.use { os -> workbook.write(os) }
+                    } ?: throw RuntimeException("No se pudo crear el archivo")
+                } else {
+                    // Android 9 and below
+                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val file = File(downloadsDir, fileName)
+                    FileOutputStream(file).use { workbook.write(it) }
+                }
                 workbook.close()
 
                 Toast.makeText(this@MainActivity,
