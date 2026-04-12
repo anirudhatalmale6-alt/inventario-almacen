@@ -63,9 +63,8 @@ class ProductRepository(context: Context) {
             description = description,
             itemGroup = itemGroup,
             inStock = 0,
-            responsible = "",
-            barcode = barcode.ifEmpty { null },
             minStock = minStock,
+            barcode = barcode.ifEmpty { null },
             sheetRow = sheetRow
         )
         _products.value = _products.value + product

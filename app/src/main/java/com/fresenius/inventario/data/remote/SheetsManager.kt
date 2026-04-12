@@ -101,9 +101,8 @@ class SheetsManager(private val context: Context) {
                 description = obj.optString("description", ""),
                 itemGroup = obj.optString("itemGroup", ""),
                 inStock = obj.optInt("inStock", 0),
-                responsible = obj.optString("responsible", ""),
-                barcode = obj.optString("barcode", "").ifEmpty { null },
                 minStock = obj.optInt("minStock", 1),
+                barcode = obj.optString("barcode", "").ifEmpty { null },
                 sheetRow = obj.getInt("sheetRow")
             ))
         }

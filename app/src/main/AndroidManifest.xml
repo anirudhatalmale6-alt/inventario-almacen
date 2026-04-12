@@ -35,6 +35,11 @@
             android:theme="@style/Theme.InventarioAlmacen" />
 
         <activity
+            android:name=".ui.scan.FastScanActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.InventarioAlmacen" />
+
+        <activity
             android:name=".ui.sheets.SheetsSetupActivity"
             android:theme="@style/Theme.InventarioAlmacen" />
 

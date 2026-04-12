@@ -3,10 +3,9 @@ package com.fresenius.inventario.ui.scan
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -22,6 +21,7 @@ import com.fresenius.inventario.data.local.ProductRepository
 import com.fresenius.inventario.databinding.ActivityScanBinding
 import com.fresenius.inventario.model.Product
 import com.fresenius.inventario.model.ScanResult
+import com.fresenius.inventario.util.SoundManager
 import kotlinx.coroutines.launch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -35,6 +35,7 @@ class ScanActivity : AppCompatActivity() {
     private lateinit var binding: ActivityScanBinding
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var repository: ProductRepository
+    private lateinit var soundManager: SoundManager
     private var scanAnalyzer: ScanAnalyzer? = null
     private var lastScanTime = 0L
     private var isScanning = true
@@ -59,6 +60,7 @@ class ScanActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         repository = ProductRepository(this)
+        soundManager = SoundManager(this)
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         binding.btnBack.setOnClickListener { finish() }
@@ -143,8 +145,6 @@ class ScanActivity : AppCompatActivity() {
         if (now - lastScanTime < 1500) return
         lastScanTime = now
 
-        vibrate()
-
         val currentMode = scanAnalyzer?.scanMode ?: ScanMode.OCR_ONLY
 
         when (currentMode) {
@@ -167,17 +167,16 @@ class ScanActivity : AppCompatActivity() {
             } else ""
 
             isScanning = false
+            soundManager.playSuccess()
 
             if (product.barcode.isNullOrEmpty()) {
-                // Product found but no barcode linked - offer to scan barcode
                 showScanBarcodePrompt(product, fuzzyNote)
             } else {
-                // Product already has barcode linked
                 showProductFound(product, product.barcode, fuzzyNote)
             }
         } else {
-            // Not found - offer to create
             isScanning = false
+            soundManager.playError()
             showCreateProductPrompt(partNo)
         }
     }
@@ -417,8 +416,9 @@ class ScanActivity : AppCompatActivity() {
         val title = if (isEntry) "Entrada de stock" else "Salida de stock"
         val input = android.widget.EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setText("1")
             hint = "Cantidad"
+            setText("")
+            requestFocus()
         }
         val padding = (20 * resources.displayMetrics.density).toInt()
         val container = android.widget.FrameLayout(this).apply {
@@ -426,13 +426,16 @@ class ScanActivity : AppCompatActivity() {
             addView(input)
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage("${product.partNo} - ${product.description}\nStock actual: ${product.inStock}")
             .setView(container)
             .setPositiveButton("Confirmar") { _, _ ->
                 val qty = input.text.toString().toIntOrNull() ?: 0
-                if (qty <= 0) return@setPositiveButton
+                if (qty <= 0) {
+                    Toast.makeText(this, "Introduce una cantidad valida", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
 
                 val newStock = if (isEntry) product.inStock + qty else (product.inStock - qty).coerceAtLeast(0)
 
@@ -457,7 +460,10 @@ class ScanActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancelar", null)
-            .show()
+            .create()
+
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dialog.show()
     }
 
     private fun resumeScanning() {
@@ -469,16 +475,10 @@ class ScanActivity : AppCompatActivity() {
         binding.tvStatus.text = "PASO 1: Apunta la cámara al texto 'Part No.' de la etiqueta"
     }
 
-    private fun vibrate() {
-        try {
-            val vibrator = getSystemService(Vibrator::class.java)
-            vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
-        } catch (_: Exception) {}
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
         scanAnalyzer?.close()
+        soundManager.release()
     }
 }
