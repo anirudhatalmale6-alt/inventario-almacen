@@ -43,6 +43,11 @@
             android:name=".ui.sheets.SheetsSetupActivity"
             android:theme="@style/Theme.InventarioAlmacen" />
 
+        <activity
+            android:name=".ui.ManualEntryActivity"
+            android:theme="@style/Theme.InventarioAlmacen"
+            android:windowSoftInputMode="adjustResize" />
+
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode,ocr" />

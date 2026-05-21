@@ -37,17 +37,17 @@ class ProductRepository(context: Context) {
     }
 
     fun findByBarcode(barcode: String): Product? {
-        // First try exact match
-        _products.value.find {
-            it.barcode?.equals(barcode, ignoreCase = true) == true
-        }?.let { return it }
+        val scannedEan = Gs1Barcode.extractEan13(barcode)
 
-        // Then try matching by GTIN only (ignore date portion after (13))
-        val scannedGtin = Gs1Barcode.extractGtin(barcode)
-        if (scannedGtin != null) {
-            return _products.value.find { product ->
-                val storedGtin = Gs1Barcode.extractGtin(product.barcode)
-                storedGtin != null && storedGtin.equals(scannedGtin, ignoreCase = true)
+        for (product in _products.value) {
+            val storedBarcodes = product.barcode ?: continue
+            val eanList = storedBarcodes.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+            for (ean in eanList) {
+                if (ean.equals(barcode, ignoreCase = true)) return product
+                if (scannedEan != null && ean.equals(scannedEan, ignoreCase = true)) return product
+                val storedEan = Gs1Barcode.extractEan13(ean)
+                if (storedEan != null && scannedEan != null && storedEan.equals(scannedEan, ignoreCase = true)) return product
             }
         }
         return null

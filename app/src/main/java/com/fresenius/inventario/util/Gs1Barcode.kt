@@ -35,6 +35,8 @@ object Gs1Barcode {
     private val GTIN_REGEX = Regex("""\(01\)(\d{13,14})""")
     // Regex to extract date after (13): (13)XXXXXX
     private val DATE_REGEX = Regex("""\(13\)(\d{6})""")
+    // Plain 13-digit EAN pattern
+    private val PLAIN_EAN_REGEX = Regex("""^\d{13}$""")
 
     /**
      * Clean and format a barcode raw value from ML Kit.
@@ -82,6 +84,37 @@ object Gs1Barcode {
      * Extract the manufacturing date from a GS1-128 barcode.
      * e.g., "(01)04030064050340(13)200423" -> "200423" (YYMMDD)
      */
+    /**
+     * Extract the 13-digit EAN from a scanned barcode.
+     * Handles GS1-128 format: (01)0XXXXXXXXXXXXX -> XXXXXXXXXXXXX
+     * Also handles plain 13-digit EAN codes directly.
+     */
+    fun extractEan13(barcode: String?): String? {
+        if (barcode.isNullOrBlank()) return null
+
+        val cleaned = clean(barcode) ?: barcode
+
+        val gtinMatch = GTIN_REGEX.find(cleaned)
+        if (gtinMatch != null) {
+            val digits = gtinMatch.groupValues[1]
+            return if (digits.length == 14 && digits.startsWith("0")) {
+                digits.substring(1)
+            } else if (digits.length == 13) {
+                digits
+            } else {
+                digits
+            }
+        }
+
+        val trimmed = barcode.trim()
+        if (PLAIN_EAN_REGEX.matches(trimmed)) return trimmed
+        if (trimmed.length == 14 && trimmed.startsWith("0") && trimmed.all { it.isDigit() }) {
+            return trimmed.substring(1)
+        }
+
+        return null
+    }
+
     fun extractDate(barcode: String?): String? {
         if (barcode.isNullOrBlank()) return null
         val match = DATE_REGEX.find(barcode)

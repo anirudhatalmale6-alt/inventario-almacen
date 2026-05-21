@@ -68,6 +68,16 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, FastScanActivity::class.java))
         }
 
+        // Button 3: Manual entry (damaged labels)
+        binding.btnManualEntry.setOnClickListener {
+            if (!repository.getSheetsManager().isConfigured()) {
+                Toast.makeText(this, "Primero configura Google Sheets", Toast.LENGTH_LONG).show()
+                startActivity(Intent(this, SheetsSetupActivity::class.java))
+                return@setOnClickListener
+            }
+            startActivity(Intent(this, ManualEntryActivity::class.java))
+        }
+
         binding.btnSetup.setOnClickListener {
             startActivity(Intent(this, SheetsSetupActivity::class.java))
         }
