@@ -158,3 +158,65 @@ function ensureHeaders() {
 
   return { status: "ok", message: "Encabezados verificados" };
 }
+
+function importEANs() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var report = ss.getSheetByName(SHEET_NAME);
+  var sapSheet = ss.getSheetByName("SAP_EAN");
+
+  if (!report) {
+    SpreadsheetApp.getUi().alert("No se encontro la pestana 'report'.");
+    return;
+  }
+  if (!sapSheet) {
+    SpreadsheetApp.getUi().alert("No se encontro la pestana 'SAP_EAN'.\n\nCrea una pestana llamada SAP_EAN y pega ahi los datos del archivo Excel SAP_Piezas_EAN.");
+    return;
+  }
+
+  var sapLastRow = sapSheet.getLastRow();
+  if (sapLastRow < 2) {
+    SpreadsheetApp.getUi().alert("La pestana SAP_EAN esta vacia.");
+    return;
+  }
+
+  var sapData = sapSheet.getRange(2, 1, sapLastRow - 1, 3).getValues();
+  var eanMap = {};
+  for (var s = 0; s < sapData.length; s++) {
+    var sapPartNo = String(sapData[s][0]).trim();
+    var sapEan = String(sapData[s][2]).trim();
+    if (sapPartNo && sapEan && sapEan !== "undefined" && sapEan !== "NaN") {
+      eanMap[sapPartNo] = sapEan;
+    }
+  }
+
+  var reportLastRow = report.getLastRow();
+  if (reportLastRow < DATA_START_ROW) {
+    SpreadsheetApp.getUi().alert("La pestana 'report' no tiene datos.");
+    return;
+  }
+
+  var reportPartNos = report.getRange(DATA_START_ROW, COL_PART_NO, reportLastRow - DATA_START_ROW + 1, 1).getValues();
+  var barcodeRange = report.getRange(DATA_START_ROW, COL_BARCODE, reportLastRow - DATA_START_ROW + 1, 1);
+  var barcodeValues = barcodeRange.getValues();
+
+  var updated = 0;
+  var skipped = 0;
+  for (var r = 0; r < reportPartNos.length; r++) {
+    var partNo = String(reportPartNos[r][0]).trim();
+    if (eanMap[partNo]) {
+      barcodeValues[r][0] = eanMap[partNo];
+      updated++;
+    } else {
+      skipped++;
+    }
+  }
+
+  barcodeRange.setValues(barcodeValues);
+
+  SpreadsheetApp.getUi().alert(
+    "Importacion completada!\n\n" +
+    "Productos actualizados con EAN: " + updated + "\n" +
+    "Productos sin EAN en SAP: " + skipped + "\n" +
+    "Total en SAP_EAN: " + Object.keys(eanMap).length
+  );
+}
