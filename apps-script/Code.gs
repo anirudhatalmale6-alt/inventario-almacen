@@ -220,3 +220,63 @@ function importEANs() {
     "Total en SAP_EAN: " + Object.keys(eanMap).length
   );
 }
+
+function addMissingProducts() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var report = ss.getSheetByName(SHEET_NAME);
+  var sapSheet = ss.getSheetByName("SAP_EAN");
+
+  if (!report) {
+    SpreadsheetApp.getUi().alert("No se encontro la pestana 'report'.");
+    return;
+  }
+  if (!sapSheet) {
+    SpreadsheetApp.getUi().alert("No se encontro la pestana 'SAP_EAN'.");
+    return;
+  }
+
+  var reportLastRow = report.getLastRow();
+  var existingPartNos = {};
+  if (reportLastRow >= DATA_START_ROW) {
+    var reportData = report.getRange(DATA_START_ROW, COL_PART_NO, reportLastRow - DATA_START_ROW + 1, 1).getValues();
+    for (var r = 0; r < reportData.length; r++) {
+      var pn = String(reportData[r][0]).trim();
+      if (pn) existingPartNos[pn] = true;
+    }
+  }
+
+  var sapLastRow = sapSheet.getLastRow();
+  var sapData = sapSheet.getRange(2, 1, sapLastRow - 1, 4).getValues();
+
+  var newRows = [];
+  for (var s = 0; s < sapData.length; s++) {
+    var sapPartNo = String(sapData[s][0]).trim();
+    if (!sapPartNo || existingPartNos[sapPartNo]) continue;
+
+    var description = String(sapData[s][1]).trim();
+    var ean = String(sapData[s][2]).trim();
+    var group = String(sapData[s][3]).trim();
+
+    if (ean === "undefined" || ean === "NaN") ean = "";
+    if (description === "undefined" || description === "NaN") description = "";
+    if (group === "undefined" || group === "NaN") group = "";
+
+    newRows.push([sapPartNo, description, group, 0, 1, ean]);
+    existingPartNos[sapPartNo] = true;
+  }
+
+  if (newRows.length === 0) {
+    SpreadsheetApp.getUi().alert("No hay productos nuevos para anadir. Todos los productos del SAP ya estan en report.");
+    return;
+  }
+
+  var insertRow = report.getLastRow() + 1;
+  report.getRange(insertRow, 1, newRows.length, 6).setValues(newRows);
+
+  SpreadsheetApp.getUi().alert(
+    "Productos anadidos!\n\n" +
+    "Nuevos productos: " + newRows.length + "\n" +
+    "Ya existentes (no duplicados): " + (sapData.length - newRows.length) + "\n" +
+    "Total en report ahora: " + report.getLastRow()
+  );
+}
