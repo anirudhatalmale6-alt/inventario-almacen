@@ -48,6 +48,10 @@
             android:theme="@style/Theme.InventarioAlmacen"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".ui.history.HistoryActivity"
+            android:theme="@style/Theme.InventarioAlmacen" />
+
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode,ocr" />

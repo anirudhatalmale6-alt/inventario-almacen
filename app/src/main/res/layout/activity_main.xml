@@ -134,14 +134,14 @@
             app:icon="@android:drawable/ic_dialog_alert" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnExport"
+            android:id="@+id/btnHistory"
             style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Excel"
+            android:text="Historial"
             android:textSize="11sp"
-            app:icon="@android:drawable/ic_menu_save" />
+            app:icon="@android:drawable/ic_menu_recent_history" />
     </LinearLayout>
 
     <!-- Filter indicator -->

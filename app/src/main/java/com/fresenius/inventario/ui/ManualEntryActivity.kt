@@ -1,5 +1,6 @@
 package com.fresenius.inventario.ui
 
+import android.animation.ObjectAnimator
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -9,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.fresenius.inventario.data.local.ProductRepository
+import com.fresenius.inventario.data.local.ScanHistoryManager
 import com.fresenius.inventario.databinding.ActivityManualEntryBinding
 import com.fresenius.inventario.model.Product
 import com.fresenius.inventario.ui.products.ProductAdapter
@@ -20,6 +22,7 @@ class ManualEntryActivity : AppCompatActivity() {
     private lateinit var binding: ActivityManualEntryBinding
     private lateinit var repository: ProductRepository
     private lateinit var soundManager: SoundManager
+    private lateinit var historyManager: ScanHistoryManager
     private lateinit var searchAdapter: ProductAdapter
     private var selectedProduct: Product? = null
 
@@ -30,6 +33,7 @@ class ManualEntryActivity : AppCompatActivity() {
 
         repository = ProductRepository(this)
         soundManager = SoundManager(this)
+        historyManager = ScanHistoryManager(this)
 
         searchAdapter = ProductAdapter { product -> selectProduct(product) }
         binding.recyclerResults.layoutManager = LinearLayoutManager(this)
@@ -57,6 +61,10 @@ class ManualEntryActivity : AppCompatActivity() {
         }
 
         binding.btnConfirm.setOnClickListener { confirmEntry() }
+
+        binding.overlayConfirm.setOnClickListener {
+            binding.overlayConfirm.visibility = View.GONE
+        }
 
         loadProducts()
     }
@@ -128,14 +136,12 @@ class ManualEntryActivity : AppCompatActivity() {
                 repository.updateStock(product, newStock)
                 soundManager.playSuccess()
 
+                historyManager.addEntry(product.partNo, product.description, quantity, "MANUAL")
+
                 binding.progressBar.visibility = View.GONE
                 binding.tvSelectedStock.text = "Stock actual: $newStock"
 
-                Toast.makeText(
-                    this@ManualEntryActivity,
-                    "${product.partNo}: +$quantity unidades (Stock: $newStock)",
-                    Toast.LENGTH_LONG
-                ).show()
+                showBigConfirmation(product.partNo, product.description, quantity, newStock)
 
                 selectedProduct = null
                 binding.cardSelected.visibility = View.GONE
@@ -149,6 +155,30 @@ class ManualEntryActivity : AppCompatActivity() {
                 Toast.makeText(this@ManualEntryActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun showBigConfirmation(partNo: String, description: String, quantity: Int, newStock: Int) {
+        binding.tvConfirmPartNo.text = partNo
+        binding.tvConfirmDesc.text = description
+        binding.tvConfirmQty.text = "+$quantity unidades"
+        binding.tvConfirmStock.text = "Stock actual: $newStock"
+
+        binding.overlayConfirm.alpha = 0f
+        binding.overlayConfirm.visibility = View.VISIBLE
+        ObjectAnimator.ofFloat(binding.overlayConfirm, "alpha", 0f, 1f).apply {
+            duration = 200
+            start()
+        }
+
+        binding.overlayConfirm.postDelayed({
+            ObjectAnimator.ofFloat(binding.overlayConfirm, "alpha", 1f, 0f).apply {
+                duration = 300
+                start()
+            }
+            binding.overlayConfirm.postDelayed({
+                binding.overlayConfirm.visibility = View.GONE
+            }, 300)
+        }, 2500)
     }
 
     override fun onDestroy() {
