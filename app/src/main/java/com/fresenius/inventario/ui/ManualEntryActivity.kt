@@ -1,10 +1,12 @@
 package com.fresenius.inventario.ui
 
 import android.animation.ObjectAnimator
+import android.content.Context
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -116,7 +118,7 @@ class ManualEntryActivity : AppCompatActivity() {
         binding.layoutQuantity.visibility = View.VISIBLE
 
         binding.etQuantity.setText("1")
-        binding.etQuantity.requestFocus()
+        hideKeyboard()
     }
 
     private fun confirmEntry() {
@@ -148,6 +150,7 @@ class ManualEntryActivity : AppCompatActivity() {
                 binding.layoutQuantity.visibility = View.GONE
                 binding.etPartNo.setText("")
                 binding.btnConfirm.isEnabled = true
+                hideKeyboard()
             } catch (e: Exception) {
                 binding.progressBar.visibility = View.GONE
                 binding.btnConfirm.isEnabled = true
@@ -169,16 +172,11 @@ class ManualEntryActivity : AppCompatActivity() {
             duration = 200
             start()
         }
+    }
 
-        binding.overlayConfirm.postDelayed({
-            ObjectAnimator.ofFloat(binding.overlayConfirm, "alpha", 1f, 0f).apply {
-                duration = 300
-                start()
-            }
-            binding.overlayConfirm.postDelayed({
-                binding.overlayConfirm.visibility = View.GONE
-            }, 300)
-        }, 2500)
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        currentFocus?.let { imm.hideSoftInputFromWindow(it.windowToken, 0) }
     }
 
     override fun onDestroy() {

@@ -205,12 +205,12 @@
             android:paddingBottom="4dp"
             android:visibility="gone" />
 
-        <!-- Recent scan history (last 4 items) -->
+        <!-- Recent scan history (scrollable) -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerRecent"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
+            android:layout_height="160dp"
+            android:nestedScrollingEnabled="true"
             android:visibility="gone" />
 
     </LinearLayout>

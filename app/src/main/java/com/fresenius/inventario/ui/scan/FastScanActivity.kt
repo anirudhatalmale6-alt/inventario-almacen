@@ -111,7 +111,7 @@ class FastScanActivity : AppCompatActivity() {
     }
 
     private fun refreshRecentHistory() {
-        val recent = historyManager.getRecent(4)
+        val recent = historyManager.getRecent(20)
         if (recent.isNotEmpty()) {
             recentAdapter.submitList(recent)
             binding.dividerHistory.visibility = View.VISIBLE
@@ -228,16 +228,15 @@ class FastScanActivity : AppCompatActivity() {
                 val actionText = "$sign$qty ${product.partNo}"
                 val bgColor = if (isEntryMode) 0xCC_2E7D32.toInt() else 0xCC_E65100.toInt()
 
+                val lowStockMsg = if (newStock < product.minStock) {
+                    "\nALERTA: Stock bajo minimo (min: ${product.minStock})"
+                } else ""
+
                 showFeedback(
-                    "$actionText\n${product.description}\nStock: $newStock",
+                    "$actionText\n${product.description}\nStock: $newStock$lowStockMsg",
                     bgColor,
                     null
                 )
-
-                if (newStock < product.minStock) {
-                    binding.tvRecentLabel.text = "ALERTA: Stock bajo minimo (min: ${product.minStock})"
-                    binding.tvRecentLabel.setTextColor(ContextCompat.getColor(this@FastScanActivity, R.color.stock_low))
-                }
 
                 // Reset quantity to 1 after scan
                 quantity = 1
