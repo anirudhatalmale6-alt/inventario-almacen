@@ -15,7 +15,7 @@ import com.fresenius.inventario.model.Product
 import com.fresenius.inventario.ui.products.ProductAdapter
 import kotlinx.coroutines.launch
 
-private enum class StockFilter { NONE, BELOW_MIN, ABOVE_MIN }
+private enum class StockFilter { NONE, ALL, BELOW_MIN, EQUAL_MIN, ABOVE_MIN }
 
 class SearchActivity : AppCompatActivity() {
 
@@ -37,7 +37,9 @@ class SearchActivity : AppCompatActivity() {
 
         binding.btnBack.setOnClickListener { finish() }
 
+        binding.btnFilterAll.setOnClickListener { toggleFilter(StockFilter.ALL) }
         binding.btnFilterLow.setOnClickListener { toggleFilter(StockFilter.BELOW_MIN) }
+        binding.btnFilterEqual.setOnClickListener { toggleFilter(StockFilter.EQUAL_MIN) }
         binding.btnFilterOk.setOnClickListener { toggleFilter(StockFilter.ABOVE_MIN) }
 
         binding.etSearch.addTextChangedListener(object : TextWatcher {
@@ -72,20 +74,15 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun updateFilterButtons() {
-        when (activeFilter) {
-            StockFilter.BELOW_MIN -> {
-                binding.btnFilterLow.alpha = 1.0f
-                binding.btnFilterOk.alpha = 0.4f
-            }
-            StockFilter.ABOVE_MIN -> {
-                binding.btnFilterLow.alpha = 0.4f
-                binding.btnFilterOk.alpha = 1.0f
-            }
-            StockFilter.NONE -> {
-                binding.btnFilterLow.alpha = 1.0f
-                binding.btnFilterOk.alpha = 1.0f
-            }
+        val allButtons = listOf(binding.btnFilterAll, binding.btnFilterLow, binding.btnFilterEqual, binding.btnFilterOk)
+        val activeButton = when (activeFilter) {
+            StockFilter.ALL -> binding.btnFilterAll
+            StockFilter.BELOW_MIN -> binding.btnFilterLow
+            StockFilter.EQUAL_MIN -> binding.btnFilterEqual
+            StockFilter.ABOVE_MIN -> binding.btnFilterOk
+            StockFilter.NONE -> null
         }
+        allButtons.forEach { it.alpha = if (activeButton == null || it == activeButton) 1.0f else 0.4f }
     }
 
     private fun applyFilters() {
@@ -93,8 +90,10 @@ class SearchActivity : AppCompatActivity() {
         var results = repository.products.value
 
         when (activeFilter) {
+            StockFilter.ALL -> {}
             StockFilter.BELOW_MIN -> results = results.filter { it.minStock > 0 && it.inStock < it.minStock }
-            StockFilter.ABOVE_MIN -> results = results.filter { it.minStock > 0 && it.inStock >= it.minStock }
+            StockFilter.EQUAL_MIN -> results = results.filter { it.minStock > 0 && it.inStock == it.minStock }
+            StockFilter.ABOVE_MIN -> results = results.filter { it.minStock > 0 && it.inStock > it.minStock }
             StockFilter.NONE -> {}
         }
 
@@ -109,16 +108,18 @@ class SearchActivity : AppCompatActivity() {
             return
         }
 
-        val limited = results.take(100)
+        val limited = results.take(200)
         adapter.submitList(limited)
 
         val label = when (activeFilter) {
+            StockFilter.ALL -> "piezas"
             StockFilter.BELOW_MIN -> "bajo minimo"
+            StockFilter.EQUAL_MIN -> "igual al minimo"
             StockFilter.ABOVE_MIN -> "sobre minimo"
             StockFilter.NONE -> "resultados"
         }
         binding.tvResultCount.text = "${limited.size} $label" +
-            if (results.size > 100) " (de ${results.size} total)" else ""
+            if (results.size > 200) " (de ${results.size} total)" else ""
     }
 
     private fun showProductDetail(product: Product) {
