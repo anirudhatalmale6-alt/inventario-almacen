@@ -94,11 +94,11 @@ class FastScanActivity : AppCompatActivity() {
             binding.tvQuantity.text = quantity.toString()
         }
         binding.btnQtyPlus5.setOnClickListener {
-            quantity += 5
+            quantity = 5
             binding.tvQuantity.text = quantity.toString()
         }
         binding.btnQtyPlus10.setOnClickListener {
-            quantity += 10
+            quantity = 10
             binding.tvQuantity.text = quantity.toString()
         }
 

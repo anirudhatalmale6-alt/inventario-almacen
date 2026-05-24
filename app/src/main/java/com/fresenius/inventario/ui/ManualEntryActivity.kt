@@ -106,6 +106,8 @@ class ManualEntryActivity : AppCompatActivity() {
     private fun selectProduct(product: Product) {
         selectedProduct = product
         hideResults()
+        hideKeyboard()
+        binding.etPartNo.clearFocus()
 
         binding.layoutSearch.visibility = View.GONE
 
@@ -117,7 +119,7 @@ class ManualEntryActivity : AppCompatActivity() {
         binding.layoutQuantity.visibility = View.VISIBLE
 
         binding.etQuantity.setText("1")
-        hideKeyboard()
+        binding.etQuantity.clearFocus()
     }
 
     private fun confirmEntry() {
