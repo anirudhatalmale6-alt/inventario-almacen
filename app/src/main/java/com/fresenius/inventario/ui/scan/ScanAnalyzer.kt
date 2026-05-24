@@ -72,8 +72,7 @@ class ScanAnalyzer(
         val box = barcode.boundingBox ?: return true
         val centerX = box.centerX().toFloat() / imageWidth
         val centerY = box.centerY().toFloat() / imageHeight
-        Log.d(TAG, "Barcode pos: x=${"%.2f".format(centerX)} y=${"%.2f".format(centerY)} img=${imageWidth}x${imageHeight}")
-        return centerX in 0.35f..0.65f && centerY in 0.35f..0.65f
+        return centerX in 0.30f..0.70f && centerY in 0.20f..0.80f
     }
 
     private fun scanBarcodeOnly(image: InputImage, imageProxy: ImageProxy) {
