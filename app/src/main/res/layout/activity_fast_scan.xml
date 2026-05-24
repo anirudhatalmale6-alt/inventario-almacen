@@ -132,8 +132,8 @@
                 android:id="@+id/btnQtyPlus"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
-                android:text="+"
-                android:textSize="20sp"
+                android:text="+1"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 app:backgroundTint="@color/primary"
                 android:textColor="@android:color/white"
@@ -144,14 +144,39 @@
                 android:minHeight="0dp"
                 android:padding="0dp" />
 
-            <TextView
-                android:id="@+id/tvQtyLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="ud."
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnQtyPlus5"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="+5"
                 android:textSize="14sp"
-                android:textColor="#888888"
-                android:layout_marginStart="8dp" />
+                android:textStyle="bold"
+                app:backgroundTint="#1976D2"
+                android:textColor="@android:color/white"
+                app:cornerRadius="22dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:layout_marginStart="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnQtyPlus10"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="+10"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                app:backgroundTint="#0D47A1"
+                android:textColor="@android:color/white"
+                app:cornerRadius="22dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:layout_marginStart="4dp" />
         </LinearLayout>
 
         <!-- Entry / Exit toggle buttons -->

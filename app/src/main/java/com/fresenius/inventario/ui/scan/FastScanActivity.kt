@@ -42,6 +42,7 @@ class FastScanActivity : AppCompatActivity() {
     private lateinit var recentAdapter: HistoryAdapter
     private var scanAnalyzer: ScanAnalyzer? = null
     private var lastScanTime = 0L
+    private var scanCooldown = 1500L
     private var isScanning = true
     private var productsLoaded = false
     private var isEntryMode = true
@@ -90,6 +91,14 @@ class FastScanActivity : AppCompatActivity() {
         }
         binding.btnQtyPlus.setOnClickListener {
             quantity++
+            binding.tvQuantity.text = quantity.toString()
+        }
+        binding.btnQtyPlus5.setOnClickListener {
+            quantity += 5
+            binding.tvQuantity.text = quantity.toString()
+        }
+        binding.btnQtyPlus10.setOnClickListener {
+            quantity += 10
             binding.tvQuantity.text = quantity.toString()
         }
 
@@ -166,6 +175,7 @@ class FastScanActivity : AppCompatActivity() {
                     }
                 }
                 scanAnalyzer?.scanMode = ScanMode.BARCODE_ONLY
+                scanAnalyzer?.restrictToCenter = true
 
                 val imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -186,7 +196,7 @@ class FastScanActivity : AppCompatActivity() {
         if (!isScanning || !productsLoaded) return
 
         val now = System.currentTimeMillis()
-        if (now - lastScanTime < 1500) return
+        if (now - lastScanTime < scanCooldown) return
         lastScanTime = now
 
         val barcode = result.barcode ?: return
@@ -195,9 +205,11 @@ class FastScanActivity : AppCompatActivity() {
 
         val product = repository.findByBarcode(barcode)
         if (product != null) {
+            scanCooldown = 1500L
             soundManager.playSuccess()
             autoUpdateStock(product)
         } else {
+            scanCooldown = 3500L
             soundManager.playError()
             showFeedback(
                 "Codigo no reconocido",

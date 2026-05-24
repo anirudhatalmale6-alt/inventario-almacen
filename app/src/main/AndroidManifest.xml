@@ -52,6 +52,11 @@
             android:name=".ui.history.HistoryActivity"
             android:theme="@style/Theme.InventarioAlmacen" />
 
+        <activity
+            android:name=".ui.SearchActivity"
+            android:theme="@style/Theme.InventarioAlmacen"
+            android:windowSoftInputMode="adjustResize" />
+
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="barcode,ocr" />

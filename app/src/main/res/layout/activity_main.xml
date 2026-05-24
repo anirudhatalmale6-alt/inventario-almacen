@@ -1,20 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="@color/background">
 
     <!-- Header -->
     <LinearLayout
-        android:id="@+id/layoutHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@color/primary"
-        android:padding="16dp"
-        app:layout_constraintTop_toTopOf="parent">
+        android:padding="16dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -34,16 +33,16 @@
             android:layout_marginTop="4dp" />
     </LinearLayout>
 
-    <!-- Two big action buttons -->
+    <!-- Main action buttons -->
     <LinearLayout
-        android:id="@+id/layoutMainButtons"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="vertical"
         android:padding="20dp"
-        app:layout_constraintTop_toBottomOf="@id/layoutHeader">
+        android:gravity="center_vertical">
 
-        <!-- Button 1: Add new piece (link barcode) -->
+        <!-- Button 1: Link new piece -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddNew"
             android:layout_width="match_parent"
@@ -58,7 +57,7 @@
             app:iconSize="28dp"
             app:cornerRadius="12dp" />
 
-        <!-- Button 2: Register entry/exit (fast barcode scan) -->
+        <!-- Button 2: Register entry/exit -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnEntryExit"
             android:layout_width="match_parent"
@@ -74,7 +73,7 @@
             app:iconSize="28dp"
             app:cornerRadius="12dp" />
 
-        <!-- Button 3: Manual entry (damaged labels) -->
+        <!-- Button 3: Manual entry -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnManualEntry"
             android:layout_width="match_parent"
@@ -90,70 +89,23 @@
             app:iconSize="28dp"
             app:cornerRadius="12dp" />
 
+        <!-- Button 4: Search products -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSearch"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:layout_marginTop="12dp"
+            android:text="Buscar pieza"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            app:backgroundTint="#7B1FA2"
+            app:icon="@android:drawable/ic_menu_search"
+            app:iconTint="@android:color/white"
+            app:iconSize="28dp"
+            app:cornerRadius="12dp" />
+
     </LinearLayout>
-
-    <!-- Action buttons bar (secondary) -->
-    <LinearLayout
-        android:id="@+id/layoutActions"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:background="@color/surface"
-        app:layout_constraintTop_toBottomOf="@id/layoutMainButtons">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSetup"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Config"
-            android:textSize="11sp"
-            app:icon="@android:drawable/ic_menu_preferences" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnFilter"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Filtrar"
-            android:textSize="11sp"
-            app:icon="@android:drawable/ic_menu_sort_by_size" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnLowStock"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Alertas"
-            android:textSize="11sp"
-            app:icon="@android:drawable/ic_dialog_alert" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnHistory"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Historial"
-            android:textSize="11sp"
-            app:icon="@android:drawable/ic_menu_recent_history" />
-    </LinearLayout>
-
-    <!-- Filter indicator -->
-    <TextView
-        android:id="@+id/tvFilter"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="8dp"
-        android:text="Filtro: Todos"
-        android:textSize="12sp"
-        android:background="@color/filter_bg"
-        app:layout_constraintTop_toBottomOf="@id/layoutActions" />
 
     <!-- Setup prompt (shown when not configured) -->
     <LinearLayout
@@ -163,9 +115,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:padding="32dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/tvFilter"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:visibility="gone">
 
         <TextView
             android:layout_width="wrap_content"
@@ -182,20 +132,35 @@
             android:layout_marginTop="8dp" />
     </LinearLayout>
 
-    <!-- Product list -->
-    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        android:id="@+id/swipeRefresh"
+    <!-- Bottom buttons -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/tvFilter"
-        app:layout_constraintBottom_toBottomOf="parent">
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
+        android:background="@color/surface">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerProducts"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:paddingBottom="20dp" />
-    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSetup"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Config"
+            android:textSize="11sp"
+            app:icon="@android:drawable/ic_menu_preferences" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnHistory"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Historial"
+            android:textSize="11sp"
+            app:icon="@android:drawable/ic_menu_recent_history" />
+    </LinearLayout>
+
+</LinearLayout>

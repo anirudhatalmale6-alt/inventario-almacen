@@ -64,13 +64,27 @@ class ScanAnalyzer(
         }
     }
 
+    @Volatile
+    var restrictToCenter = false
+
+    private fun isInScanFrame(barcode: Barcode, imageWidth: Int, imageHeight: Int): Boolean {
+        if (!restrictToCenter) return true
+        val box = barcode.boundingBox ?: return true
+        val centerX = box.centerX().toFloat() / imageWidth
+        val centerY = box.centerY().toFloat() / imageHeight
+        return centerX in 0.15f..0.85f && centerY in 0.25f..0.75f
+    }
+
     private fun scanBarcodeOnly(image: InputImage, imageProxy: ImageProxy) {
         barcodeScanner.process(image)
             .addOnSuccessListener { barcodes ->
-                if (barcodes.isNotEmpty()) {
-                    val barcode = barcodes.first()
-                    val raw = barcode.rawValue
-                    val format = when (barcode.format) {
+                val imgW = image.width
+                val imgH = image.height
+                val validBarcode = barcodes.firstOrNull { isInScanFrame(it, imgW, imgH) }
+
+                if (validBarcode != null) {
+                    val raw = validBarcode.rawValue
+                    val format = when (validBarcode.format) {
                         Barcode.FORMAT_CODE_128 -> "CODE_128"
                         Barcode.FORMAT_EAN_13 -> "EAN_13"
                         Barcode.FORMAT_EAN_8 -> "EAN_8"
@@ -81,7 +95,6 @@ class ScanAnalyzer(
                     Log.d(TAG, "Barcode detected: $raw ($format)")
                     deliverResult(raw, format, null, imageProxy)
                 } else {
-                    // No barcode found in this frame, keep trying
                     isProcessing = false
                     imageProxy.close()
                 }

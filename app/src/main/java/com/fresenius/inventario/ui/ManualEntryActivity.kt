@@ -107,8 +107,7 @@ class ManualEntryActivity : AppCompatActivity() {
         selectedProduct = product
         hideResults()
 
-        binding.etPartNo.setText(product.partNo)
-        binding.etPartNo.clearFocus()
+        binding.layoutSearch.visibility = View.GONE
 
         binding.tvSelectedPartNo.text = product.partNo
         binding.tvSelectedDesc.text = product.description
@@ -148,6 +147,7 @@ class ManualEntryActivity : AppCompatActivity() {
                 selectedProduct = null
                 binding.cardSelected.visibility = View.GONE
                 binding.layoutQuantity.visibility = View.GONE
+                binding.layoutSearch.visibility = View.VISIBLE
                 binding.etPartNo.setText("")
                 binding.btnConfirm.isEnabled = true
                 hideKeyboard()
