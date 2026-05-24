@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.fresenius.inventario.R
 import com.fresenius.inventario.data.local.ProductRepository
 import com.fresenius.inventario.data.local.ScanHistoryManager
 import com.fresenius.inventario.databinding.ActivityManualEntryBinding
@@ -62,7 +63,8 @@ class ManualEntryActivity : AppCompatActivity() {
             binding.etQuantity.setText((current + 1).toString())
         }
 
-        binding.btnConfirm.setOnClickListener { confirmEntry() }
+        binding.btnConfirm.setOnClickListener { confirmEntry(isEntry = true) }
+        binding.btnConfirmExit.setOnClickListener { confirmEntry(isEntry = false) }
 
         binding.overlayConfirm.setOnClickListener {
             binding.overlayConfirm.visibility = View.GONE
@@ -122,7 +124,7 @@ class ManualEntryActivity : AppCompatActivity() {
         binding.etQuantity.clearFocus()
     }
 
-    private fun confirmEntry() {
+    private fun confirmEntry(isEntry: Boolean) {
         val product = selectedProduct ?: return
         val quantity = binding.etQuantity.text.toString().toIntOrNull() ?: 0
         if (quantity <= 0) {
@@ -132,19 +134,26 @@ class ManualEntryActivity : AppCompatActivity() {
 
         binding.progressBar.visibility = View.VISIBLE
         binding.btnConfirm.isEnabled = false
+        binding.btnConfirmExit.isEnabled = false
+
+        val newStock = if (isEntry) {
+            product.inStock + quantity
+        } else {
+            (product.inStock - quantity).coerceAtLeast(0)
+        }
+        val type = if (isEntry) "ENTRADA" else "SALIDA"
 
         lifecycleScope.launch {
             try {
-                val newStock = product.inStock + quantity
                 repository.updateStock(product, newStock)
                 soundManager.playSuccess()
 
-                historyManager.addEntry(product.partNo, product.description, quantity, "MANUAL")
+                historyManager.addEntry(product.partNo, product.description, quantity, type)
 
                 binding.progressBar.visibility = View.GONE
                 binding.tvSelectedStock.text = "Stock actual: $newStock"
 
-                showBigConfirmation(product.partNo, product.description, quantity, newStock)
+                showBigConfirmation(product.partNo, product.description, quantity, newStock, isEntry)
 
                 selectedProduct = null
                 binding.cardSelected.visibility = View.GONE
@@ -152,20 +161,24 @@ class ManualEntryActivity : AppCompatActivity() {
                 binding.layoutSearch.visibility = View.VISIBLE
                 binding.etPartNo.setText("")
                 binding.btnConfirm.isEnabled = true
+                binding.btnConfirmExit.isEnabled = true
                 hideKeyboard()
             } catch (e: Exception) {
                 binding.progressBar.visibility = View.GONE
                 binding.btnConfirm.isEnabled = true
+                binding.btnConfirmExit.isEnabled = true
                 soundManager.playError()
                 Toast.makeText(this@ManualEntryActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    private fun showBigConfirmation(partNo: String, description: String, quantity: Int, newStock: Int) {
+    private fun showBigConfirmation(partNo: String, description: String, quantity: Int, newStock: Int, isEntry: Boolean) {
         binding.tvConfirmPartNo.text = partNo
         binding.tvConfirmDesc.text = description
-        binding.tvConfirmQty.text = "+$quantity unidades"
+        val sign = if (isEntry) "+" else "-"
+        binding.tvConfirmQty.text = "$sign$quantity unidades"
+        binding.tvConfirmQty.setTextColor(if (isEntry) getColor(R.color.stock_ok) else getColor(R.color.stock_low))
         binding.tvConfirmStock.text = "Stock actual: $newStock"
 
         binding.overlayConfirm.alpha = 0f
