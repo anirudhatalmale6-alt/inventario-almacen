@@ -51,6 +51,56 @@
             android:textSize="18sp" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- Stock filters -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filtros:"
+            android:textSize="13sp"
+            android:textColor="#666666"
+            android:layout_marginEnd="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFilterLow"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Bajo minimo"
+            android:textSize="12sp"
+            android:textAllCaps="false"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/stock_low"
+            android:textColor="@color/stock_low"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="0dp"
+            android:layout_marginEnd="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnFilterOk"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Sobre minimo"
+            android:textSize="12sp"
+            android:textAllCaps="false"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/stock_ok"
+            android:textColor="@color/stock_ok"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="0dp" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/tvResultCount"
         android:layout_width="match_parent"

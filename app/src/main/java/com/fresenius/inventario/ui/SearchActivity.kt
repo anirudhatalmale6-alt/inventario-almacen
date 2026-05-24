@@ -15,11 +15,14 @@ import com.fresenius.inventario.model.Product
 import com.fresenius.inventario.ui.products.ProductAdapter
 import kotlinx.coroutines.launch
 
+private enum class StockFilter { NONE, BELOW_MIN, ABOVE_MIN }
+
 class SearchActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySearchBinding
     private lateinit var repository: ProductRepository
     private lateinit var adapter: ProductAdapter
+    private var activeFilter = StockFilter.NONE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,16 +37,14 @@ class SearchActivity : AppCompatActivity() {
 
         binding.btnBack.setOnClickListener { finish() }
 
+        binding.btnFilterLow.setOnClickListener { toggleFilter(StockFilter.BELOW_MIN) }
+        binding.btnFilterOk.setOnClickListener { toggleFilter(StockFilter.ABOVE_MIN) }
+
         binding.etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                val query = s?.toString()?.trim() ?: ""
-                if (query.length >= 2) searchProducts(query)
-                else {
-                    adapter.submitList(emptyList())
-                    binding.tvResultCount.text = ""
-                }
+                applyFilters()
             }
         })
 
@@ -64,14 +65,60 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
-    private fun searchProducts(query: String) {
-        val results = repository.products.value.filter { product ->
-            product.partNo.contains(query, ignoreCase = true) ||
-            product.description.contains(query, ignoreCase = true)
-        }.take(50)
+    private fun toggleFilter(filter: StockFilter) {
+        activeFilter = if (activeFilter == filter) StockFilter.NONE else filter
+        updateFilterButtons()
+        applyFilters()
+    }
 
-        adapter.submitList(results)
-        binding.tvResultCount.text = "${results.size} resultados"
+    private fun updateFilterButtons() {
+        when (activeFilter) {
+            StockFilter.BELOW_MIN -> {
+                binding.btnFilterLow.alpha = 1.0f
+                binding.btnFilterOk.alpha = 0.4f
+            }
+            StockFilter.ABOVE_MIN -> {
+                binding.btnFilterLow.alpha = 0.4f
+                binding.btnFilterOk.alpha = 1.0f
+            }
+            StockFilter.NONE -> {
+                binding.btnFilterLow.alpha = 1.0f
+                binding.btnFilterOk.alpha = 1.0f
+            }
+        }
+    }
+
+    private fun applyFilters() {
+        val query = binding.etSearch.text?.toString()?.trim() ?: ""
+        var results = repository.products.value
+
+        when (activeFilter) {
+            StockFilter.BELOW_MIN -> results = results.filter { it.minStock > 0 && it.inStock < it.minStock }
+            StockFilter.ABOVE_MIN -> results = results.filter { it.minStock > 0 && it.inStock >= it.minStock }
+            StockFilter.NONE -> {}
+        }
+
+        if (query.length >= 2) {
+            results = results.filter { product ->
+                product.partNo.contains(query, ignoreCase = true) ||
+                product.description.contains(query, ignoreCase = true)
+            }
+        } else if (activeFilter == StockFilter.NONE) {
+            adapter.submitList(emptyList())
+            binding.tvResultCount.text = ""
+            return
+        }
+
+        val limited = results.take(100)
+        adapter.submitList(limited)
+
+        val label = when (activeFilter) {
+            StockFilter.BELOW_MIN -> "bajo minimo"
+            StockFilter.ABOVE_MIN -> "sobre minimo"
+            StockFilter.NONE -> "resultados"
+        }
+        binding.tvResultCount.text = "${limited.size} $label" +
+            if (results.size > 100) " (de ${results.size} total)" else ""
     }
 
     private fun showProductDetail(product: Product) {
