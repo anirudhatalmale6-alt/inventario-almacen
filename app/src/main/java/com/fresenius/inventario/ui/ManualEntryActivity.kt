@@ -74,14 +74,17 @@ class ManualEntryActivity : AppCompatActivity() {
     }
 
     private fun loadProducts() {
-        binding.progressBar.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                repository.refresh()
-                binding.progressBar.visibility = View.GONE
-            } catch (e: Exception) {
-                binding.progressBar.visibility = View.GONE
-                Toast.makeText(this@ManualEntryActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+        repository.loadLocal()
+        if (repository.products.value.isEmpty()) {
+            binding.progressBar.visibility = View.VISIBLE
+            lifecycleScope.launch {
+                try {
+                    repository.syncFromSheets()
+                    binding.progressBar.visibility = View.GONE
+                } catch (e: Exception) {
+                    binding.progressBar.visibility = View.GONE
+                    Toast.makeText(this@ManualEntryActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -132,10 +135,7 @@ class ManualEntryActivity : AppCompatActivity() {
             return
         }
 
-        binding.progressBar.visibility = View.VISIBLE
-        binding.btnConfirm.isEnabled = false
-        binding.btnConfirmExit.isEnabled = false
-
+        val delta = if (isEntry) quantity else -quantity
         val newStock = if (isEntry) {
             product.inStock + quantity
         } else {
@@ -143,34 +143,19 @@ class ManualEntryActivity : AppCompatActivity() {
         }
         val type = if (isEntry) "ENTRADA" else "SALIDA"
 
-        lifecycleScope.launch {
-            try {
-                repository.updateStock(product, newStock)
-                soundManager.playSuccess()
+        repository.updateStockLocal(product, newStock, delta, type)
+        soundManager.playSuccess()
+        historyManager.addEntry(product.partNo, product.description, quantity, type)
 
-                historyManager.addEntry(product.partNo, product.description, quantity, type)
+        binding.tvSelectedStock.text = "Stock actual: $newStock"
+        showBigConfirmation(product.partNo, product.description, quantity, newStock, isEntry)
 
-                binding.progressBar.visibility = View.GONE
-                binding.tvSelectedStock.text = "Stock actual: $newStock"
-
-                showBigConfirmation(product.partNo, product.description, quantity, newStock, isEntry)
-
-                selectedProduct = null
-                binding.cardSelected.visibility = View.GONE
-                binding.layoutQuantity.visibility = View.GONE
-                binding.layoutSearch.visibility = View.VISIBLE
-                binding.etPartNo.setText("")
-                binding.btnConfirm.isEnabled = true
-                binding.btnConfirmExit.isEnabled = true
-                hideKeyboard()
-            } catch (e: Exception) {
-                binding.progressBar.visibility = View.GONE
-                binding.btnConfirm.isEnabled = true
-                binding.btnConfirmExit.isEnabled = true
-                soundManager.playError()
-                Toast.makeText(this@ManualEntryActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
+        selectedProduct = null
+        binding.cardSelected.visibility = View.GONE
+        binding.layoutQuantity.visibility = View.GONE
+        binding.layoutSearch.visibility = View.VISIBLE
+        binding.etPartNo.setText("")
+        hideKeyboard()
     }
 
     private fun showBigConfirmation(partNo: String, description: String, quantity: Int, newStock: Int, isEntry: Boolean) {

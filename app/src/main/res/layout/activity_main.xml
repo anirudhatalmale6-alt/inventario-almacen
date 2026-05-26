@@ -15,13 +15,28 @@
         android:background="@color/primary"
         android:padding="16dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Inventario Almacen"
-            android:textColor="@android:color/white"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Inventario Almacen"
+                android:textColor="@android:color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#B0FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tvStats"
@@ -31,6 +46,16 @@
             android:textColor="@android:color/white"
             android:textSize="13sp"
             android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tvPendingCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFEB3B"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginTop="2dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Main action buttons -->
@@ -79,7 +104,7 @@
             android:layout_width="match_parent"
             android:layout_height="72dp"
             android:layout_marginTop="12dp"
-            android:text="Anadir pieza manualmente"
+            android:text="Entrada / Salida manual"
             android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="@android:color/white"
@@ -151,6 +176,16 @@
             android:text="Config"
             android:textSize="11sp"
             app:icon="@android:drawable/ic_menu_preferences" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSync"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Sincronizar"
+            android:textSize="11sp"
+            app:icon="@android:drawable/ic_popup_sync" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnHistory"

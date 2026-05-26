@@ -54,15 +54,20 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun loadProducts() {
-        binding.progressBar.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                repository.refresh()
-                binding.progressBar.visibility = View.GONE
-                binding.tvResultCount.text = "${repository.products.value.size} piezas en base de datos"
-            } catch (e: Exception) {
-                binding.progressBar.visibility = View.GONE
-                Toast.makeText(this@SearchActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+        repository.loadLocal()
+        if (repository.products.value.isNotEmpty()) {
+            binding.tvResultCount.text = "${repository.products.value.size} piezas en base de datos"
+        } else {
+            binding.progressBar.visibility = View.VISIBLE
+            lifecycleScope.launch {
+                try {
+                    repository.syncFromSheets()
+                    binding.progressBar.visibility = View.GONE
+                    binding.tvResultCount.text = "${repository.products.value.size} piezas en base de datos"
+                } catch (e: Exception) {
+                    binding.progressBar.visibility = View.GONE
+                    Toast.makeText(this@SearchActivity, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }

@@ -130,27 +130,38 @@ class FastScanActivity : AppCompatActivity() {
     }
 
     private fun loadProductsAndStartCamera() {
-        binding.progressBar.visibility = View.VISIBLE
-        binding.tvStatus.text = "Cargando productos..."
-
-        lifecycleScope.launch {
-            try {
-                repository.refresh()
-                productsLoaded = true
-                binding.progressBar.visibility = View.GONE
-                updateModeButtons()
-
-                if (ContextCompat.checkSelfPermission(this@FastScanActivity, Manifest.permission.CAMERA)
-                    == PackageManager.PERMISSION_GRANTED
-                ) {
-                    startCamera()
-                } else {
-                    requestPermission.launch(Manifest.permission.CAMERA)
+        repository.loadLocal()
+        if (repository.products.value.isNotEmpty()) {
+            productsLoaded = true
+            updateModeButtons()
+            if (ContextCompat.checkSelfPermission(this@FastScanActivity, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                startCamera()
+            } else {
+                requestPermission.launch(Manifest.permission.CAMERA)
+            }
+        } else {
+            binding.progressBar.visibility = View.VISIBLE
+            binding.tvStatus.text = "Cargando productos..."
+            lifecycleScope.launch {
+                try {
+                    repository.syncFromSheets()
+                    productsLoaded = true
+                    binding.progressBar.visibility = View.GONE
+                    updateModeButtons()
+                    if (ContextCompat.checkSelfPermission(this@FastScanActivity, Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        startCamera()
+                    } else {
+                        requestPermission.launch(Manifest.permission.CAMERA)
+                    }
+                } catch (e: Exception) {
+                    binding.progressBar.visibility = View.GONE
+                    binding.tvStatus.text = "Error: ${e.message}"
+                    soundManager.playError()
                 }
-            } catch (e: Exception) {
-                binding.progressBar.visibility = View.GONE
-                binding.tvStatus.text = "Error: ${e.message}"
-                soundManager.playError()
             }
         }
     }
@@ -221,6 +232,7 @@ class FastScanActivity : AppCompatActivity() {
 
     private fun autoUpdateStock(product: Product) {
         val qty = quantity
+        val delta = if (isEntryMode) qty else -qty
         val newStock = if (isEntryMode) {
             product.inStock + qty
         } else {
@@ -229,40 +241,26 @@ class FastScanActivity : AppCompatActivity() {
 
         val type = if (isEntryMode) "ENTRADA" else "SALIDA"
 
-        lifecycleScope.launch {
-            try {
-                repository.updateStock(product, newStock)
+        repository.updateStockLocal(product, newStock, delta, type)
+        historyManager.addEntry(product.partNo, product.description, qty, type)
+        refreshRecentHistory()
 
-                historyManager.addEntry(product.partNo, product.description, qty, type)
-                refreshRecentHistory()
+        val sign = if (isEntryMode) "+" else "-"
+        val actionText = "$sign$qty ${product.partNo}"
+        val bgColor = if (isEntryMode) 0xCC_2E7D32.toInt() else 0xCC_E65100.toInt()
 
-                val sign = if (isEntryMode) "+" else "-"
-                val actionText = "$sign$qty ${product.partNo}"
-                val bgColor = if (isEntryMode) 0xCC_2E7D32.toInt() else 0xCC_E65100.toInt()
+        val lowStockMsg = if (newStock < product.minStock) {
+            "\nALERTA: Stock bajo minimo (min: ${product.minStock})"
+        } else ""
 
-                val lowStockMsg = if (newStock < product.minStock) {
-                    "\nALERTA: Stock bajo minimo (min: ${product.minStock})"
-                } else ""
+        showFeedback(
+            "$actionText\n${product.description}\nStock: $newStock$lowStockMsg",
+            bgColor,
+            null
+        )
 
-                showFeedback(
-                    "$actionText\n${product.description}\nStock: $newStock$lowStockMsg",
-                    bgColor,
-                    null
-                )
-
-                // Reset quantity to 1 after scan
-                quantity = 1
-                binding.tvQuantity.text = "1"
-
-            } catch (e: Exception) {
-                soundManager.playError()
-                showFeedback(
-                    "Error: ${e.message}",
-                    0xCC_C62828.toInt(),
-                    null
-                )
-            }
-        }
+        quantity = 1
+        binding.tvQuantity.text = "1"
     }
 
     @Suppress("UNUSED_PARAMETER")

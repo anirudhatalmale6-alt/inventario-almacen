@@ -5,29 +5,76 @@ import com.fresenius.inventario.data.remote.SheetsManager
 import com.fresenius.inventario.model.Product
 import com.fresenius.inventario.util.Gs1Barcode
 import com.fresenius.inventario.util.PartNoExtractor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
+
+data class SyncResult(val synced: Int, val failed: Int, val total: Int)
 
 class ProductRepository(context: Context) {
 
+    private val localDb = LocalDatabase(context)
     private val sheetsManager = SheetsManager(context)
     private val _products = MutableStateFlow<List<Product>>(emptyList())
     val products: StateFlow<List<Product>> = _products
 
     fun getSheetsManager() = sheetsManager
 
-    suspend fun refresh() {
-        sheetsManager.ensureHeaders()
-        _products.value = sheetsManager.loadProducts()
+    fun loadLocal() {
+        _products.value = localDb.loadProducts()
     }
 
+    fun hasLocalData(): Boolean = localDb.hasProducts()
+
+    suspend fun refresh() {
+        if (localDb.hasProducts()) {
+            _products.value = localDb.loadProducts()
+        } else {
+            syncFromSheets()
+        }
+    }
+
+    suspend fun syncFromSheets() {
+        sheetsManager.ensureHeaders()
+        val products = sheetsManager.loadProducts()
+        localDb.saveProducts(products)
+        _products.value = products
+    }
+
+    suspend fun syncToSheets(): SyncResult {
+        val pending = localDb.getPendingChangesGrouped()
+        if (pending.isEmpty()) return SyncResult(0, 0, 0)
+
+        val freshProducts = sheetsManager.loadProducts()
+        var synced = 0
+        var failed = 0
+
+        for ((partNo, totalDelta) in pending) {
+            val product = freshProducts.find { it.partNo == partNo } ?: continue
+            val newStock = (product.inStock + totalDelta).coerceAtLeast(0)
+            try {
+                sheetsManager.updateStock(product, newStock)
+                product.inStock = newStock
+                synced++
+            } catch (_: Exception) {
+                failed++
+            }
+        }
+
+        localDb.saveProducts(freshProducts)
+        localDb.clearPendingChanges()
+        _products.value = freshProducts
+        return SyncResult(synced, failed, pending.size)
+    }
+
+    fun getPendingCount(): Int = localDb.getPendingCount()
+
     fun findByPartNo(partNo: String): Product? {
-        // Exact match first
         _products.value.find {
             it.partNo.equals(partNo, ignoreCase = true)
         }?.let { return it }
 
-        // Fuzzy match (OCR can misread digits: 4/6, 3/8, 5/6, etc.)
         val knownPartNos = _products.value.map { it.partNo }
         val fuzzyMatch = PartNoExtractor.findClosestMatch(partNo, knownPartNos)
         if (fuzzyMatch != null) {
@@ -53,19 +100,28 @@ class ProductRepository(context: Context) {
         return null
     }
 
+    fun updateStockLocal(product: Product, newStock: Int, delta: Int, type: String) {
+        product.inStock = newStock
+        localDb.updateStock(product.partNo, newStock)
+        localDb.addPendingChange(product.partNo, delta, type)
+        _products.value = localDb.loadProducts()
+    }
+
+    suspend fun updateStock(product: Product, newStock: Int) {
+        val delta = newStock - product.inStock
+        val type = if (delta >= 0) "ENTRADA" else "SALIDA"
+        updateStockLocal(product, newStock, delta, type)
+    }
+
     suspend fun linkBarcode(product: Product, barcode: String) {
         product.barcode = barcode
+        localDb.updateBarcode(product.partNo, barcode)
         sheetsManager.updateBarcode(product, barcode)
     }
 
     suspend fun setMinStock(product: Product, minStock: Int) {
         product.minStock = minStock
         sheetsManager.updateMinStock(product, minStock)
-    }
-
-    suspend fun updateStock(product: Product, newStock: Int) {
-        product.inStock = newStock
-        sheetsManager.updateStock(product, newStock)
     }
 
     suspend fun addProduct(partNo: String, description: String, itemGroup: String, barcode: String, minStock: Int): Product {
@@ -80,6 +136,7 @@ class ProductRepository(context: Context) {
             sheetRow = sheetRow
         )
         _products.value = _products.value + product
+        localDb.saveProducts(_products.value)
         return product
     }
 
