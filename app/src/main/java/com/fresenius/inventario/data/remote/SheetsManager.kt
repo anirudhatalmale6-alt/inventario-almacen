@@ -137,6 +137,11 @@ class SheetsManager(private val context: Context) {
         if (result.has("error")) throw RuntimeException(result.getString("error"))
     }
 
+    suspend fun batchUpdateStock(updates: Map<Int, Int>): JSONObject {
+        val data = updates.entries.joinToString(",") { "${it.key}:${it.value}" }
+        return callScript(mapOf("action" to "batchUpdateStock", "data" to data))
+    }
+
     suspend fun addProduct(partNo: String, description: String, itemGroup: String, barcode: String, minStock: Int): Int {
         val result = callScript(mapOf(
             "action" to "addProduct",

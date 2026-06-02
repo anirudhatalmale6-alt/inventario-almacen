@@ -11,8 +11,8 @@ android {
         applicationId = "com.fresenius.inventario"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "3.0"
+        versionCode = 11
+        versionName = "3.1"
     }
 
     buildTypes {

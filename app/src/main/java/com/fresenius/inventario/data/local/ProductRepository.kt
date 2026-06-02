@@ -47,23 +47,35 @@ class ProductRepository(context: Context) {
         if (pending.isEmpty()) return SyncResult(0, 0, 0)
 
         val freshProducts = sheetsManager.loadProducts()
-        var synced = 0
-        var failed = 0
 
+        val batchUpdates = mutableMapOf<Int, Int>()
         for ((partNo, totalDelta) in pending) {
             val product = freshProducts.find { it.partNo == partNo } ?: continue
             val newStock = (product.inStock + totalDelta).coerceAtLeast(0)
+            batchUpdates[product.sheetRow] = newStock
+            product.inStock = newStock
+        }
+
+        var synced = 0
+        var failed = 0
+
+        if (batchUpdates.isNotEmpty()) {
             try {
-                sheetsManager.updateStock(product, newStock)
-                product.inStock = newStock
-                synced++
+                val result = sheetsManager.batchUpdateStock(batchUpdates)
+                if (result.has("error")) {
+                    failed = batchUpdates.size
+                } else {
+                    synced = result.optInt("updated", batchUpdates.size)
+                }
             } catch (_: Exception) {
-                failed++
+                failed = batchUpdates.size
             }
         }
 
         localDb.saveProducts(freshProducts)
-        localDb.clearPendingChanges()
+        if (failed == 0) {
+            localDb.clearPendingChanges()
+        }
         _products.value = freshProducts
         return SyncResult(synced, failed, pending.size)
     }
