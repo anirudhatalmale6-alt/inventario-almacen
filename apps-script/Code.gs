@@ -49,6 +49,9 @@ function handleRequest(e) {
       case "addProduct":
         result = addProduct(e.parameter.partNo, e.parameter.description, e.parameter.itemGroup, e.parameter.barcode, e.parameter.minStock);
         break;
+      case "batchUpdateStock":
+        result = batchUpdateStock(e.parameter.data);
+        break;
       case "ensureHeaders":
         result = ensureHeaders();
         break;
@@ -123,6 +126,34 @@ function updateStock(row, stock) {
   stock = parseInt(stock);
   sheet.getRange(row, COL_IN_STOCK).setValue(stock);
   return { status: "ok", message: "Stock actualizado en fila " + row };
+}
+
+function batchUpdateStock(data) {
+  if (!data) return { error: "No data provided" };
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < DATA_START_ROW) return { error: "No data in sheet" };
+
+  var stockRange = sheet.getRange(DATA_START_ROW, COL_IN_STOCK, lastRow - DATA_START_ROW + 1, 1);
+  var stockValues = stockRange.getValues();
+
+  var pairs = data.split(",");
+  var updated = 0;
+  for (var i = 0; i < pairs.length; i++) {
+    var parts = pairs[i].split(":");
+    if (parts.length !== 2) continue;
+    var row = parseInt(parts[0]);
+    var stock = parseInt(parts[1]);
+    if (isNaN(row) || isNaN(stock)) continue;
+    var idx = row - DATA_START_ROW;
+    if (idx >= 0 && idx < stockValues.length) {
+      stockValues[idx][0] = stock;
+      updated++;
+    }
+  }
+
+  stockRange.setValues(stockValues);
+  return { status: "ok", updated: updated, message: updated + " productos actualizados" };
 }
 
 function addProduct(partNo, description, itemGroup, barcode, minStock) {
